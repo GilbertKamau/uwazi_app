@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// 1. The `url` property inside the `datasource` block is correctly written for older Prisma versions, but in Prisma 5.7.0+ (aka Prisma 7), connection URLs for migrations must go in `prisma.config.ts`, not here. However, usage inside the Prisma Client itself (for running `prisma generate` and runtime usage) is still supported, so for most use-cases (and local development), the following is still valid unless ONLY using migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - for managing users who submit/review reports
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String
+  role      String     @default("viewer") // admin, reviewer, viewer
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  reports   Report[]
+  comments  Comment[]
+
+  @@map("users")
+}
+
+// Report model - main entity for tracking social justice issues
+model Report {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  category    String     // e.g., "Discrimination", "Harassment", "Other"
+  status      String     @default("pending") // pending, reviewing, resolved, closed
+  priority    String     @default("medium") // low, medium, high, critical
+  
+  // Figma-related fields
+  figmaLink   String?
+  figmaFields Json?      // Store flexible Figma field data
+
+  // Location and context
+  location    String?
+  date        DateTime?
+  
+  // Creator info
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  comments    Comment[]
+  tags        Tag[]
+
+  @@map("reports")
+}
+
+// Comment model - for discussions on reports
+model Comment {
+  id        String     @id @default(cuid())
+  content   String
+  
+  // Relations
+  reportId  String
+  report    Report     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("comments")
+}
+
+// Tag model - for categorizing/organizing reports
+model Tag {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  description String?
+  
+  // Relations
+  reports   Report[]
+
+  @@map("tags")
+}
+
