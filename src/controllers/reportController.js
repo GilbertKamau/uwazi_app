@@ -5,89 +5,141 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 // CREATE - Create a new report
+
+// CREATE - Create a new report
 const createReport = async (req, res) => {
   try {
-    const { title, description, category, priority, authorId, location, date, figmaLink, figmaFields } = req.body;
+    const { 
+      title, 
+      category, 
+      description, 
+      county,      // Matches the "Select county" dropdown
+      location,    // Matches "Specific area"
+      isAnonymous, // Matches the safety checkbox
+      authorId,    // Logged in user ID (if any)
+      authorName,  // Matches the "Your Name" input
+      evidence     // Array of strings (URLs)
+    } = req.body;
 
-    // Validate required fields
-    if (!title || !authorId) {
-      return res.status(400).json({ error: 'Title and authorId are required' });
+    // 1. Validate required fields based on UI (marked with * in screenshot)
+    if (!title || !category || !description || !county) {
+      return res.status(400).json({ 
+        error: 'Please fill in all required fields: Title, Category, Description, and County' 
+      });
     }
 
-    // Create report in database
+    // 2. Create the report in the database
     const report = await prisma.report.create({
       data: {
         title,
-        description: description || null,
-        category: category || 'Other',
-        priority: priority || 'medium',
-        authorId,
+        category,
+        description,
+        county,
         location: location || null,
-        date: date ? new Date(date) : null,
-        figmaLink: figmaLink || null,
-        figmaFields: figmaFields || null
+        isAnonymous: !!isAnonymous,
+        // UI logic: If anonymous, use the default string; otherwise, use the provided name
+        authorName: isAnonymous ? "Anonymous Report" : (authorName || "Guest User"),
+        // Database logic: Keep the relation if logged in, but the UI will hide it if anonymous
+        authorId: authorId || null,
+        // Matches the String[] type in schema
+        evidence: evidence || [],
+        status: 'pending', // Default status for new reports
+        priority: 'medium', // Default priority
+        upvotes: 0
       },
+      // Include author details in the response to update the UI feed immediately
       include: {
         author: {
-          select: { id: true, name: true, email: true }
+          select: { name: true, role: true }
         }
       }
     });
 
-    res.status(201).json({
-      message: 'Report created successfully',
-      data: report
+    res.status(201).json({ 
+      message: 'Report submitted successfully', 
+      data: report 
     });
   } catch (error) {
-    console.error('Error creating report:', error);
-    res.status(500).json({ error: 'Failed to create report' });
+    console.error('Prisma Error:', error);
+    res.status(500).json({ error: 'Failed to create report. Ensure the database is synced.' });
   }
 };
 
-// READ - Get all reports with filters
+// READ - Get all reports (Optimized for the Feed in image_23e093.png)
 const getAllReports = async (req, res) => {
   try {
-    const { status, category, priority, authorId, limit = 10, skip = 0 } = req.query;
-
-    // Build filter object
-    const where = {};
-    if (status) where.status = status;
-    if (category) where.category = category;
-    if (priority) where.priority = priority;
-    if (authorId) where.authorId = authorId;
-
-    // Fetch reports with pagination
     const reports = await prisma.report.findMany({
-      where,
-      include: {
-        author: {
-          select: { id: true, name: true, email: true }
-        },
-        comments: {
-          select: { id: true, content: true }
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        category: true,
+        county: true,
+        location: true,
+        createdAt: true,
+        isAnonymous: true,
+        authorName: true,
+        status: true,
+        _count: {
+          select: { 
+            comments: true, // For the "67" comments icon in UI
+            upvotes: true   // For the "312" upvote icon in UI
+          }
         }
       },
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit),
-      skip: parseInt(skip)
+      orderBy: { createdAt: 'desc' }
     });
 
-    // Get total count for pagination
-    const total = await prisma.report.count({ where });
-
-    res.status(200).json({
-      data: reports,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        skip: parseInt(skip)
-      }
-    });
+    res.status(200).json(reports);
   } catch (error) {
-    console.error('Error fetching reports:', error);
     res.status(500).json({ error: 'Failed to fetch reports' });
   }
 };
+
+// // READ - Get all reports with filters
+// const getAllReports = async (req, res) => {
+//   try {
+//     const { status, category, priority, authorId, limit = 10, skip = 0 } = req.query;
+
+//     // Build filter object
+//     const where = {};
+//     if (status) where.status = status;
+//     if (category) where.category = category;
+//     if (priority) where.priority = priority;
+//     if (authorId) where.authorId = authorId;
+
+//     // Fetch reports with pagination
+//     const reports = await prisma.report.findMany({
+//       where,
+//       include: {
+//         author: {
+//           select: { id: true, name: true, email: true }
+//         },
+//         comments: {
+//           select: { id: true, content: true }
+//         }
+//       },
+//       orderBy: { createdAt: 'desc' },
+//       take: parseInt(limit),
+//       skip: parseInt(skip)
+//     });
+
+//     // Get total count for pagination
+//     const total = await prisma.report.count({ where });
+
+//     res.status(200).json({
+//       data: reports,
+//       pagination: {
+//         total,
+//         limit: parseInt(limit),
+//         skip: parseInt(skip)
+//       }
+//     });
+//   } catch (error) {
+//     console.error('Error fetching reports:', error);
+//     res.status(500).json({ error: 'Failed to fetch reports' });
+//   }
+// };
 
 // READ - Get a single report by ID
 const getReportById = async (req, res) => {

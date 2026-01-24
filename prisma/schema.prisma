@@ -11,81 +11,77 @@ datasource db {
 }
 
 // User model - for managing users who submit/review reports
+// User model - handles authentication and roles
 model User {
-  id        String     @id @default(cuid())
-  email     String     @unique
+  id        String   @id @default(uuid())
+  email     String   @unique
   name      String
-  role      String     @default("viewer") // admin, reviewer, viewer
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  role      String   @default("viewer") // admin, reviewer, viewer
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relations
-  reports   Report[]
-  comments  Comment[]
+  // Opposite relation fields required by Prisma
+  reports  Report[]
+  comments Comment[]
 
   @@map("users")
 }
 
-// Report model - main entity for tracking social justice issues
+// Report model - aligned with Uwazi UI (Kenya Counties, Anonymous status)
 model Report {
-  id          String     @id @default(cuid())
+  id          String  @id @default(cuid())
   title       String
   description String?
-  category    String     // e.g., "Discrimination", "Harassment", "Other"
-  status      String     @default("pending") // pending, reviewing, resolved, closed
-  priority    String     @default("medium") // low, medium, high, critical
-  
-  // Figma-related fields
-  figmaLink   String?
-  figmaFields Json?      // Store flexible Figma field data
+  category    String // e.g., "Judiciary", "Police"
 
-  // Location and context
-  location    String?
-  date        DateTime?
-  
-  // Creator info
-  authorId    String
-  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
+  // UI Specific fields from screenshots
+  county      String // For Kenya Counties dropdown
+  location    String? // "Specific area"
+  isAnonymous Boolean  @default(false)
+  authorName  String? // Store "Anonymous Report" or typed name
+  evidence    String[] // Array of URLs for Photos/Videos
+
+  status   String @default("pending") // e.g., "Under Investigation"
+  priority String @default("medium")
+  upvotes  Int    @default(0)
+
+  // Figma-related fields for flexibility
+  figmaLink   String?
+  figmaFields Json?
+
+  // Relationship to User
+  // authorId is optional (?) to support fully anonymous submissions without an account
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
   // Timestamps
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  comments    Comment[]
-  tags        Tag[]
+  comments Comment[]
+  tags     Tag[]
 
   @@map("reports")
 }
 
-// Comment model - for discussions on reports
+// Minimal Comment & Tag models to satisfy relations
 model Comment {
-  id        String     @id @default(cuid())
+  id        String   @id @default(cuid())
   content   String
-  
-  // Relations
   reportId  String
-  report    Report     @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
   authorId  String
-  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
-  // Timestamps
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
 
   @@map("comments")
 }
 
-// Tag model - for categorizing/organizing reports
 model Tag {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  description String?
-  
-  // Relations
-  reports   Report[]
-
-  @@map("tags")
+  id      String   @id @default(cuid())
+  name    String   @unique
+  reports Report[]
 }
 
+// Comment model - for discussions on reports

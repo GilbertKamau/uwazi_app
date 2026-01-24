@@ -62,7 +62,18 @@ const createUser = async (req, res) => {
     res.status(500).json({ error: 'Failed to create user' });
   }
 };
+// Updated Login Logic for "Continue Anonymously"
+const loginUser = async (req, res) => {
+  const { email, password, isAnonymousGuest } = req.body;
 
+  if (isAnonymousGuest) {
+    // Logic for creating a temporary session without an account
+    return res.status(200).json({ 
+      message: 'Browsing as Guest', 
+      user: { role: 'viewer', isAnonymous: true } 
+    });
+  }
+};
 // READ - Get all users
 const getAllUsers = async (req, res) => {
   try {
@@ -290,6 +301,7 @@ const updateUserRole = async (req, res) => {
 
 module.exports = {
   createUser,
+  loginUser,
   getAllUsers,
   getUserById,
   updateUser,
