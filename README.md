@@ -164,4 +164,28 @@ Valid vs invalid submissions:
 Normal vs Needs Review checks:
 - If count exceeds the baseline threshold, status is "Needs Review".
 - Otherwise the status remains "Normal".
+
+## Frontend Integration (HTTP Endpoints)
+
+This project can be used by a frontend via these endpoints (served by `api.py`):
+
+- `GET /health` -> server health
+- `GET /signal-types` -> list allowed signal types
+- `POST /signals` -> submit a new signal (validated + stored)
+- `GET /stats?window=day|week` -> group-only aggregated stats (safe for judges)
+
+Run the API server:
+- **No-install option (recommended here)**: `python simple_api.py`
+- Optional FastAPI option (needs internet/PyPI access):
+  - Install deps: `python -m pip install -r requirements.txt`
+  - Start server: `python -m uvicorn api:app --reload --port 8000`
+
+Example `POST /signals` body:
+```json
+{
+  "type": "repeated_unusual_submissions",
+  "timestamp": "2026-01-24T20:10:00Z",
+  "context": { "eventId": "optional", "note": "optional short description" }
+}
+```
  
