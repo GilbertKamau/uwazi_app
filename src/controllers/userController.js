@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 // CREATE - Register a new user
 const createUser = async (req, res) => {
   try {
-    const { email, name, role = 'viewer' } = req.body;
+    const { email, name, role = 'viewer',isAnonymousGuest } = req.body;
 
     // Validate required fields
     if (!email || !name) {
