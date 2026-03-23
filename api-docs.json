@@ -1,0 +1,784 @@
+﻿{
+    "openapi":  "3.0.0",
+    "info":  {
+                 "title":  "Uwazi API Documentation",
+                 "version":  "1.0.0",
+                 "description":  "API documentation for the Uwazi Social Justice Tracking Application"
+             },
+    "servers":  [
+                    {
+                        "url":  "http://localhost:5000"
+                    }
+                ],
+    "components":  {
+                       "securitySchemes":  {
+                                               "AdminAuth":  {
+                                                                 "type":  "apiKey",
+                                                                 "in":  "header",
+                                                                 "name":  "X-User-Id",
+                                                                 "description":  "Admin user ID used for protected admin endpoints"
+                                                             }
+                                           }
+                   },
+    "paths":  {
+                  "/api/comments":  {
+                                        "post":  {
+                                                     "summary":  "Create a new comment on a report",
+                                                     "tags":  [
+                                                                  "Comments"
+                                                              ],
+                                                     "requestBody":  {
+                                                                         "required":  true,
+                                                                         "content":  {
+                                                                                         "application/json":  {
+                                                                                                                  "schema":  {
+                                                                                                                                 "type":  "object",
+                                                                                                                                 "required":  [
+                                                                                                                                                  "content",
+                                                                                                                                                  "reportId",
+                                                                                                                                                  "authorId"
+                                                                                                                                              ],
+                                                                                                                                 "properties":  {
+                                                                                                                                                    "content":  {
+                                                                                                                                                                    "type":  "string"
+                                                                                                                                                                },
+                                                                                                                                                    "reportId":  {
+                                                                                                                                                                     "type":  "string"
+                                                                                                                                                                 },
+                                                                                                                                                    "authorId":  {
+                                                                                                                                                                     "type":  "string"
+                                                                                                                                                                 }
+                                                                                                                                                }
+                                                                                                                             }
+                                                                                                              }
+                                                                                     }
+                                                                     },
+                                                     "responses":  {
+                                                                       "201":  {
+                                                                                   "description":  "Comment created successfully"
+                                                                               },
+                                                                       "400":  {
+                                                                                   "description":  "Validation error"
+                                                                               }
+                                                                   }
+                                                 }
+                                    },
+                  "/api/comments/report/{reportId}":  {
+                                                          "get":  {
+                                                                      "summary":  "Get all comments for a report",
+                                                                      "tags":  [
+                                                                                   "Comments"
+                                                                               ],
+                                                                      "parameters":  [
+                                                                                         {
+                                                                                             "in":  "path",
+                                                                                             "name":  "reportId",
+                                                                                             "required":  true,
+                                                                                             "schema":  {
+                                                                                                            "type":  "string"
+                                                                                                        }
+                                                                                         }
+                                                                                     ],
+                                                                      "responses":  {
+                                                                                        "200":  {
+                                                                                                    "description":  "List of comments for the report"
+                                                                                                }
+                                                                                    }
+                                                                  }
+                                                      },
+                  "/api/comments/{id}":  {
+                                             "get":  {
+                                                         "summary":  "Get a single comment by ID",
+                                                         "tags":  [
+                                                                      "Comments"
+                                                                  ],
+                                                         "parameters":  [
+                                                                            {
+                                                                                "in":  "path",
+                                                                                "name":  "id",
+                                                                                "required":  true,
+                                                                                "schema":  {
+                                                                                               "type":  "string"
+                                                                                           }
+                                                                            }
+                                                                        ],
+                                                         "responses":  {
+                                                                           "200":  {
+                                                                                       "description":  "Comment details"
+                                                                                   },
+                                                                           "404":  {
+                                                                                       "description":  "Comment not found"
+                                                                                   }
+                                                                       }
+                                                     },
+                                             "put":  {
+                                                         "summary":  "Update a comment",
+                                                         "tags":  [
+                                                                      "Comments"
+                                                                  ],
+                                                         "parameters":  [
+                                                                            {
+                                                                                "in":  "path",
+                                                                                "name":  "id",
+                                                                                "required":  true,
+                                                                                "schema":  {
+                                                                                               "type":  "string"
+                                                                                           }
+                                                                            }
+                                                                        ],
+                                                         "requestBody":  {
+                                                                             "required":  true,
+                                                                             "content":  {
+                                                                                             "application/json":  {
+                                                                                                                      "schema":  {
+                                                                                                                                     "type":  "object",
+                                                                                                                                     "properties":  {
+                                                                                                                                                        "content":  {
+                                                                                                                                                                        "type":  "string"
+                                                                                                                                                                    }
+                                                                                                                                                    }
+                                                                                                                                 }
+                                                                                                                  }
+                                                                                         }
+                                                                         },
+                                                         "responses":  {
+                                                                           "200":  {
+                                                                                       "description":  "Comment updated successfully"
+                                                                                   },
+                                                                           "404":  {
+                                                                                       "description":  "Comment not found"
+                                                                                   }
+                                                                       }
+                                                     },
+                                             "delete":  {
+                                                            "summary":  "Delete a comment",
+                                                            "tags":  [
+                                                                         "Comments"
+                                                                     ],
+                                                            "parameters":  [
+                                                                               {
+                                                                                   "in":  "path",
+                                                                                   "name":  "id",
+                                                                                   "required":  true,
+                                                                                   "schema":  {
+                                                                                                  "type":  "string"
+                                                                                              }
+                                                                               }
+                                                                           ],
+                                                            "responses":  {
+                                                                              "200":  {
+                                                                                          "description":  "Comment deleted successfully"
+                                                                                      },
+                                                                              "404":  {
+                                                                                          "description":  "Comment not found"
+                                                                                      }
+                                                                          }
+                                                        }
+                                         },
+                  "/api/metrics/signal-types":  {
+                                                    "get":  {
+                                                                "summary":  "List allowed signal types (admin only)",
+                                                                "tags":  [
+                                                                             "Metrics"
+                                                                         ],
+                                                                "security":  [
+                                                                                 {
+                                                                                     "AdminAuth":  [
+
+                                                                                                   ]
+                                                                                 }
+                                                                             ],
+                                                                "responses":  {
+                                                                                  "200":  {
+                                                                                              "description":  "List of signal types"
+                                                                                          },
+                                                                                  "401":  {
+                                                                                              "description":  "Missing or invalid admin credentials"
+                                                                                          },
+                                                                                  "403":  {
+                                                                                              "description":  "Admin role required"
+                                                                                          }
+                                                                              }
+                                                            }
+                                                },
+                  "/api/metrics/stats":  {
+                                             "get":  {
+                                                         "summary":  "Get aggregated signal stats (admin only)",
+                                                         "tags":  [
+                                                                      "Metrics"
+                                                                  ],
+                                                         "security":  [
+                                                                          {
+                                                                              "AdminAuth":  [
+
+                                                                                            ]
+                                                                          }
+                                                                      ],
+                                                         "parameters":  [
+                                                                            {
+                                                                                "in":  "query",
+                                                                                "name":  "window",
+                                                                                "schema":  {
+                                                                                               "type":  "string",
+                                                                                               "enum":  [
+                                                                                                            "day",
+                                                                                                            "week"
+                                                                                                        ]
+                                                                                           },
+                                                                                "description":  "Aggregation window"
+                                                                            }
+                                                                        ],
+                                                         "responses":  {
+                                                                           "200":  {
+                                                                                       "description":  "Aggregated stats by window and type"
+                                                                                   },
+                                                                           "400":  {
+                                                                                       "description":  "Invalid window parameter"
+                                                                                   },
+                                                                           "401":  {
+                                                                                       "description":  "Missing or invalid admin credentials"
+                                                                                   },
+                                                                           "403":  {
+                                                                                       "description":  "Admin role required"
+                                                                                   }
+                                                                       }
+                                                     }
+                                         },
+                  "/api/reports":  {
+                                       "post":  {
+                                                    "summary":  "Create a new report",
+                                                    "tags":  [
+                                                                 "Reports"
+                                                             ],
+                                                    "requestBody":  {
+                                                                        "required":  true,
+                                                                        "content":  {
+                                                                                        "application/json":  {
+                                                                                                                 "schema":  {
+                                                                                                                                "type":  "object",
+                                                                                                                                "required":  [
+                                                                                                                                                 "title",
+                                                                                                                                                 "category",
+                                                                                                                                                 "county"
+                                                                                                                                             ],
+                                                                                                                                "properties":  {
+                                                                                                                                                   "title":  {
+                                                                                                                                                                 "type":  "string"
+                                                                                                                                                             },
+                                                                                                                                                   "description":  {
+                                                                                                                                                                       "type":  "string"
+                                                                                                                                                                   },
+                                                                                                                                                   "category":  {
+                                                                                                                                                                    "type":  "string",
+                                                                                                                                                                    "description":  "e.g. Judiciary, Police"
+                                                                                                                                                                },
+                                                                                                                                                   "county":  {
+                                                                                                                                                                  "type":  "string",
+                                                                                                                                                                  "description":  "Kenya county name"
+                                                                                                                                                              },
+                                                                                                                                                   "location":  {
+                                                                                                                                                                    "type":  "string"
+                                                                                                                                                                },
+                                                                                                                                                   "isAnonymous":  {
+                                                                                                                                                                       "type":  "boolean"
+                                                                                                                                                                   },
+                                                                                                                                                   "authorName":  {
+                                                                                                                                                                      "type":  "string"
+                                                                                                                                                                  },
+                                                                                                                                                   "evidence":  {
+                                                                                                                                                                    "type":  "array",
+                                                                                                                                                                    "items":  {
+                                                                                                                                                                                  "type":  "string",
+                                                                                                                                                                                  "description":  "URL to photo or video evidence"
+                                                                                                                                                                              }
+                                                                                                                                                                }
+                                                                                                                                               }
+                                                                                                                            }
+                                                                                                             }
+                                                                                    }
+                                                                    },
+                                                    "responses":  {
+                                                                      "201":  {
+                                                                                  "description":  "Report created successfully"
+                                                                              },
+                                                                      "400":  {
+                                                                                  "description":  "Validation error"
+                                                                              }
+                                                                  }
+                                                },
+                                       "get":  {
+                                                   "summary":  "Get all reports",
+                                                   "tags":  [
+                                                                "Reports"
+                                                            ],
+                                                   "responses":  {
+                                                                     "200":  {
+                                                                                 "description":  "List of reports"
+                                                                             }
+                                                                 }
+                                               }
+                                   },
+                  "/api/reports/{id}":  {
+                                            "get":  {
+                                                        "summary":  "Get a single report by ID",
+                                                        "tags":  [
+                                                                     "Reports"
+                                                                 ],
+                                                        "parameters":  [
+                                                                           {
+                                                                               "in":  "path",
+                                                                               "name":  "id",
+                                                                               "required":  true,
+                                                                               "schema":  {
+                                                                                              "type":  "string"
+                                                                                          }
+                                                                           }
+                                                                       ],
+                                                        "responses":  {
+                                                                          "200":  {
+                                                                                      "description":  "Report details"
+                                                                                  },
+                                                                          "404":  {
+                                                                                      "description":  "Report not found"
+                                                                                  }
+                                                                      }
+                                                    },
+                                            "put":  {
+                                                        "summary":  "Update a report",
+                                                        "tags":  [
+                                                                     "Reports"
+                                                                 ],
+                                                        "parameters":  [
+                                                                           {
+                                                                               "in":  "path",
+                                                                               "name":  "id",
+                                                                               "required":  true,
+                                                                               "schema":  {
+                                                                                              "type":  "string"
+                                                                                          }
+                                                                           }
+                                                                       ],
+                                                        "requestBody":  {
+                                                                            "required":  true,
+                                                                            "content":  {
+                                                                                            "application/json":  {
+                                                                                                                     "schema":  {
+                                                                                                                                    "type":  "object",
+                                                                                                                                    "properties":  {
+                                                                                                                                                       "title":  {
+                                                                                                                                                                     "type":  "string"
+                                                                                                                                                                 },
+                                                                                                                                                       "description":  {
+                                                                                                                                                                           "type":  "string"
+                                                                                                                                                                       },
+                                                                                                                                                       "category":  {
+                                                                                                                                                                        "type":  "string"
+                                                                                                                                                                    },
+                                                                                                                                                       "county":  {
+                                                                                                                                                                      "type":  "string"
+                                                                                                                                                                  },
+                                                                                                                                                       "location":  {
+                                                                                                                                                                        "type":  "string"
+                                                                                                                                                                    },
+                                                                                                                                                       "status":  {
+                                                                                                                                                                      "type":  "string"
+                                                                                                                                                                  },
+                                                                                                                                                       "priority":  {
+                                                                                                                                                                        "type":  "string"
+                                                                                                                                                                    },
+                                                                                                                                                       "evidence":  {
+                                                                                                                                                                        "type":  "array",
+                                                                                                                                                                        "items":  {
+                                                                                                                                                                                      "type":  "string"
+                                                                                                                                                                                  }
+                                                                                                                                                                    }
+                                                                                                                                                   }
+                                                                                                                                }
+                                                                                                                 }
+                                                                                        }
+                                                                        },
+                                                        "responses":  {
+                                                                          "200":  {
+                                                                                      "description":  "Report updated successfully"
+                                                                                  },
+                                                                          "404":  {
+                                                                                      "description":  "Report not found"
+                                                                                  }
+                                                                      }
+                                                    },
+                                            "delete":  {
+                                                           "summary":  "Delete a report",
+                                                           "tags":  [
+                                                                        "Reports"
+                                                                    ],
+                                                           "parameters":  [
+                                                                              {
+                                                                                  "in":  "path",
+                                                                                  "name":  "id",
+                                                                                  "required":  true,
+                                                                                  "schema":  {
+                                                                                                 "type":  "string"
+                                                                                             }
+                                                                              }
+                                                                          ],
+                                                           "responses":  {
+                                                                             "200":  {
+                                                                                         "description":  "Report deleted successfully"
+                                                                                     },
+                                                                             "404":  {
+                                                                                         "description":  "Report not found"
+                                                                                     }
+                                                                         }
+                                                       }
+                                        },
+                  "/api/reports/{id}/status":  {
+                                                   "patch":  {
+                                                                 "summary":  "Update report status",
+                                                                 "tags":  [
+                                                                              "Reports"
+                                                                          ],
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "in":  "path",
+                                                                                        "name":  "id",
+                                                                                        "required":  true,
+                                                                                        "schema":  {
+                                                                                                       "type":  "string"
+                                                                                                   }
+                                                                                    }
+                                                                                ],
+                                                                 "requestBody":  {
+                                                                                     "required":  true,
+                                                                                     "content":  {
+                                                                                                     "application/json":  {
+                                                                                                                              "schema":  {
+                                                                                                                                             "type":  "object",
+                                                                                                                                             "required":  [
+                                                                                                                                                              "status"
+                                                                                                                                                          ],
+                                                                                                                                             "properties":  {
+                                                                                                                                                                "status":  {
+                                                                                                                                                                               "type":  "string"
+                                                                                                                                                                           },
+                                                                                                                                                                "priority":  {
+                                                                                                                                                                                 "type":  "string"
+                                                                                                                                                                             }
+                                                                                                                                                            }
+                                                                                                                                         }
+                                                                                                                          }
+                                                                                                 }
+                                                                                 },
+                                                                 "responses":  {
+                                                                                   "200":  {
+                                                                                               "description":  "Report status updated"
+                                                                                           },
+                                                                                   "404":  {
+                                                                                               "description":  "Report not found"
+                                                                                           }
+                                                                               }
+                                                             }
+                                               },
+                  "/api/signals":  {
+                                       "post":  {
+                                                    "summary":  "Submit a new integrity signal",
+                                                    "tags":  [
+                                                                 "Signals"
+                                                             ],
+                                                    "requestBody":  {
+                                                                        "required":  true,
+                                                                        "content":  {
+                                                                                        "application/json":  {
+                                                                                                                 "schema":  {
+                                                                                                                                "type":  "object",
+                                                                                                                                "required":  [
+                                                                                                                                                 "type"
+                                                                                                                                             ],
+                                                                                                                                "properties":  {
+                                                                                                                                                   "type":  {
+                                                                                                                                                                "type":  "string",
+                                                                                                                                                                "description":  "Signal type key"
+                                                                                                                                                            },
+                                                                                                                                                   "timestamp":  {
+                                                                                                                                                                     "type":  "string",
+                                                                                                                                                                     "format":  "date-time",
+                                                                                                                                                                     "description":  "ISO-8601 timestamp"
+                                                                                                                                                                 },
+                                                                                                                                                   "context":  {
+                                                                                                                                                                   "type":  "object",
+                                                                                                                                                                   "properties":  {
+                                                                                                                                                                                      "eventId":  "@{type=string}",
+                                                                                                                                                                                      "note":  "@{type=string}"
+                                                                                                                                                                                  }
+                                                                                                                                                               }
+                                                                                                                                               }
+                                                                                                                            }
+                                                                                                             }
+                                                                                    }
+                                                                    },
+                                                    "responses":  {
+                                                                      "201":  {
+                                                                                  "description":  "Signal submitted successfully"
+                                                                              },
+                                                                      "400":  {
+                                                                                  "description":  "Validation error"
+                                                                              }
+                                                                  }
+                                                }
+                                   },
+                  "/api/users":  {
+                                     "post":  {
+                                                  "summary":  "Create a new user",
+                                                  "tags":  [
+                                                               "Users"
+                                                           ],
+                                                  "requestBody":  {
+                                                                      "required":  true,
+                                                                      "content":  {
+                                                                                      "application/json":  {
+                                                                                                               "schema":  {
+                                                                                                                              "type":  "object",
+                                                                                                                              "required":  [
+                                                                                                                                               "email",
+                                                                                                                                               "name"
+                                                                                                                                           ],
+                                                                                                                              "properties":  {
+                                                                                                                                                 "email":  {
+                                                                                                                                                               "type":  "string",
+                                                                                                                                                               "format":  "email"
+                                                                                                                                                           },
+                                                                                                                                                 "name":  {
+                                                                                                                                                              "type":  "string"
+                                                                                                                                                          },
+                                                                                                                                                 "role":  {
+                                                                                                                                                              "type":  "string",
+                                                                                                                                                              "enum":  [
+                                                                                                                                                                           "admin",
+                                                                                                                                                                           "reviewer",
+                                                                                                                                                                           "viewer"
+                                                                                                                                                                       ],
+                                                                                                                                                              "default":  "viewer"
+                                                                                                                                                          }
+                                                                                                                                             }
+                                                                                                                          }
+                                                                                                           }
+                                                                                  }
+                                                                  },
+                                                  "responses":  {
+                                                                    "201":  {
+                                                                                "description":  "User created successfully"
+                                                                            },
+                                                                    "400":  {
+                                                                                "description":  "Validation error"
+                                                                            },
+                                                                    "409":  {
+                                                                                "description":  "User with this email already exists"
+                                                                            }
+                                                                }
+                                              },
+                                     "get":  {
+                                                 "summary":  "Get all users",
+                                                 "tags":  [
+                                                              "Users"
+                                                          ],
+                                                 "parameters":  [
+                                                                    {
+                                                                        "in":  "query",
+                                                                        "name":  "role",
+                                                                        "schema":  {
+                                                                                       "type":  "string",
+                                                                                       "enum":  [
+                                                                                                    "admin",
+                                                                                                    "reviewer",
+                                                                                                    "viewer"
+                                                                                                ]
+                                                                                   },
+                                                                        "description":  "Optional role filter"
+                                                                    },
+                                                                    {
+                                                                        "in":  "query",
+                                                                        "name":  "limit",
+                                                                        "schema":  {
+                                                                                       "type":  "integer",
+                                                                                       "default":  10
+                                                                                   }
+                                                                    },
+                                                                    {
+                                                                        "in":  "query",
+                                                                        "name":  "skip",
+                                                                        "schema":  {
+                                                                                       "type":  "integer",
+                                                                                       "default":  0
+                                                                                   }
+                                                                    }
+                                                                ],
+                                                 "responses":  {
+                                                                   "200":  {
+                                                                               "description":  "Paginated list of users"
+                                                                           }
+                                                               }
+                                             }
+                                 },
+                  "/api/users/{id}":  {
+                                          "get":  {
+                                                      "summary":  "Get a single user by ID",
+                                                      "tags":  [
+                                                                   "Users"
+                                                               ],
+                                                      "parameters":  [
+                                                                         {
+                                                                             "in":  "path",
+                                                                             "name":  "id",
+                                                                             "required":  true,
+                                                                             "schema":  {
+                                                                                            "type":  "string"
+                                                                                        }
+                                                                         }
+                                                                     ],
+                                                      "responses":  {
+                                                                        "200":  {
+                                                                                    "description":  "User details"
+                                                                                },
+                                                                        "404":  {
+                                                                                    "description":  "User not found"
+                                                                                }
+                                                                    }
+                                                  },
+                                          "put":  {
+                                                      "summary":  "Update a user",
+                                                      "tags":  [
+                                                                   "Users"
+                                                               ],
+                                                      "parameters":  [
+                                                                         {
+                                                                             "in":  "path",
+                                                                             "name":  "id",
+                                                                             "required":  true,
+                                                                             "schema":  {
+                                                                                            "type":  "string"
+                                                                                        }
+                                                                         }
+                                                                     ],
+                                                      "requestBody":  {
+                                                                          "required":  true,
+                                                                          "content":  {
+                                                                                          "application/json":  {
+                                                                                                                   "schema":  {
+                                                                                                                                  "type":  "object",
+                                                                                                                                  "properties":  {
+                                                                                                                                                     "email":  {
+                                                                                                                                                                   "type":  "string",
+                                                                                                                                                                   "format":  "email"
+                                                                                                                                                               },
+                                                                                                                                                     "name":  {
+                                                                                                                                                                  "type":  "string"
+                                                                                                                                                              }
+                                                                                                                                                 }
+                                                                                                                              }
+                                                                                                               }
+                                                                                      }
+                                                                      },
+                                                      "responses":  {
+                                                                        "200":  {
+                                                                                    "description":  "User updated successfully"
+                                                                                },
+                                                                        "400":  {
+                                                                                    "description":  "Validation error"
+                                                                                },
+                                                                        "404":  {
+                                                                                    "description":  "User not found"
+                                                                                }
+                                                                    }
+                                                  },
+                                          "delete":  {
+                                                         "summary":  "Delete a user",
+                                                         "tags":  [
+                                                                      "Users"
+                                                                  ],
+                                                         "parameters":  [
+                                                                            {
+                                                                                "in":  "path",
+                                                                                "name":  "id",
+                                                                                "required":  true,
+                                                                                "schema":  {
+                                                                                               "type":  "string"
+                                                                                           }
+                                                                            }
+                                                                        ],
+                                                         "responses":  {
+                                                                           "200":  {
+                                                                                       "description":  "User deleted successfully"
+                                                                                   },
+                                                                           "404":  {
+                                                                                       "description":  "User not found"
+                                                                                   }
+                                                                       }
+                                                     }
+                                      },
+                  "/api/users/{id}/role":  {
+                                               "patch":  {
+                                                             "summary":  "Update user role",
+                                                             "tags":  [
+                                                                          "Users"
+                                                                      ],
+                                                             "parameters":  [
+                                                                                {
+                                                                                    "in":  "path",
+                                                                                    "name":  "id",
+                                                                                    "required":  true,
+                                                                                    "schema":  {
+                                                                                                   "type":  "string"
+                                                                                               }
+                                                                                }
+                                                                            ],
+                                                             "requestBody":  {
+                                                                                 "required":  true,
+                                                                                 "content":  {
+                                                                                                 "application/json":  {
+                                                                                                                          "schema":  {
+                                                                                                                                         "type":  "object",
+                                                                                                                                         "required":  [
+                                                                                                                                                          "role"
+                                                                                                                                                      ],
+                                                                                                                                         "properties":  {
+                                                                                                                                                            "role":  {
+                                                                                                                                                                         "type":  "string",
+                                                                                                                                                                         "enum":  [
+                                                                                                                                                                                      "admin",
+                                                                                                                                                                                      "reviewer",
+                                                                                                                                                                                      "viewer"
+                                                                                                                                                                                  ]
+                                                                                                                                                                     }
+                                                                                                                                                        }
+                                                                                                                                     }
+                                                                                                                      }
+                                                                                             }
+                                                                             },
+                                                             "responses":  {
+                                                                               "200":  {
+                                                                                           "description":  "User role updated"
+                                                                                       },
+                                                                               "400":  {
+                                                                                           "description":  "Invalid role"
+                                                                                       },
+                                                                               "404":  {
+                                                                                           "description":  "User not found"
+                                                                                       }
+                                                                           }
+                                                         }
+                                           }
+              },
+    "tags":  [
+                 {
+                     "name":  "Comments",
+                     "description":  "Comment operations on reports"
+                 },
+                 {
+                     "name":  "Reports",
+                     "description":  "Social justice report operations"
+                 },
+                 {
+                     "name":  "Users",
+                     "description":  "User management"
+                 }
+             ]
+}

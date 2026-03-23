@@ -6,6 +6,8 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { PrismaClient } = require('@prisma/client');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 
 // Initialize Express app
 const app = express();
@@ -13,11 +15,53 @@ const app = express();
 // Initialize Prisma Client
 const prisma = new PrismaClient();
 
+// Swagger / OpenAPI configuration
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Uwazi API Documentation',
+      version: '1.0.0',
+      description: 'API documentation for the Uwazi Social Justice Tracking Application',
+    },
+    servers: [
+      {
+        url: 'http://localhost:5000', // Your local development URL
+      },
+    ],
+    components: {
+      securitySchemes: {
+        AdminAuth: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-User-Id',
+          description: 'Admin user ID used for protected admin endpoints',
+        },
+      },
+    },
+  },
+  apis: ['./src/routes/*.js'], // Path to the API docs (where your routes are)
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check for the backend service
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Server is running
+ */
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'Server is running' });
@@ -27,11 +71,15 @@ app.get('/health', (req, res) => {
 const reportRoutes = require('./src/routes/reportRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const commentRoutes = require('./src/routes/commentRoutes');
+const metricsRoutes = require('./src/routes/metricsRoutes');
+const signalRoutes = require('./src/routes/signalRoutes');
 
 // Use routes
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/metrics', metricsRoutes);
+app.use('/api/signals', signalRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
