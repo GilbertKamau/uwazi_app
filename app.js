@@ -8,6 +8,7 @@ const bodyParser = require('body-parser');
 const { PrismaClient } = require('@prisma/client');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 // Initialize Express app
 const app = express();
@@ -80,6 +81,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/signals', signalRoutes);
+
+// Route legacy Python API requests
+app.use('/api/legacy', createProxyMiddleware({ target: 'http://localhost:8000', changeOrigin: true }));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

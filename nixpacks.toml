@@ -1,7 +1,0 @@
-providers = ["node"]
-
-[build]
-cmd = "npm install"
-
-[start]
-cmd = "npm start"
