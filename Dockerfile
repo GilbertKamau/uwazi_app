@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r python-service/requirements.txt uvicorn setupt
 # Copy rest of the application
 COPY . .
 
+# Generate Prisma client
+RUN npx prisma generate
+
 # Setup start script
 RUN chmod +x start.sh
 
