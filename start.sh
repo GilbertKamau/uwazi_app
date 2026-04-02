@@ -7,4 +7,4 @@ cd ..
 
 # Start Node.js API in the foreground
 echo "Starting Node.js API..."
-npm start
+exec npm start
