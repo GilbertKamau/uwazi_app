@@ -80,10 +80,10 @@ const getAllReports = async (req, res) => {
         isAnonymous: true,
         authorName: true,
         status: true,
+        upvotes: true,
         _count: {
           select: { 
-            comments: true, // For the "67" comments icon in UI
-            upvotes: true   // For the "312" upvote icon in UI
+            comments: true // For the "67" comments icon in UI
           }
         }
       },
