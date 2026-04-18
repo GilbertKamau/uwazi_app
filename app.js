@@ -84,6 +84,7 @@ const userRoutes = require('./src/routes/userRoutes');
 const commentRoutes = require('./src/routes/commentRoutes');
 const metricsRoutes = require('./src/routes/metricsRoutes');
 const signalRoutes = require('./src/routes/signalRoutes');
+const politicianRoutes = require('./src/routes/politicianRoutes');
 
 // Use routes
 app.use('/api/reports', reportRoutes);
@@ -91,6 +92,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/signals', signalRoutes);
+app.use('/api/politicians', politicianRoutes);
 
 // Route legacy Python API requests
 app.use('/api/legacy', createProxyMiddleware({ target: 'http://localhost:8000', changeOrigin: true }));

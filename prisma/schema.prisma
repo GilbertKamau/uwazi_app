@@ -86,3 +86,57 @@ model Tag {
 }
 
 // Comment model - for discussions on reports
+
+// --- Scraper Models ---
+
+model Politician {
+  id             String          @id @default(cuid())
+  name           String
+  office         String // e.g., "President", "Governor", "MP", "Senator"
+  county         String? // The county they are running in (if applicable)
+  party          String?
+  isCleared      Boolean         @default(false)
+  // Relations
+  courtCases     CourtCase[]
+  socialMentions SocialMention[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("politicians")
+}
+
+model CourtCase {
+  id          String    @id @default(cuid())
+  caseNumber  String    @unique
+  courtName   String // e.g., "High Court", "Supreme Court"
+  description String // Overview of the allegations/case details
+  status      String // e.g., "Pending", "Dismissed", "Ongoing", "Convicted"
+  dateFiled   DateTime?
+  url         String? // Link to official judiciary/e-filing portal or case PDF
+  isVerified  Boolean   @default(true) // Should be checked to ensure no rumors
+
+  politicianId String
+  politician   Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("court_cases")
+}
+
+model SocialMention {
+  id       String   @id @default(cuid())
+  platform String // e.g., "Twitter"
+  content  String
+  url      String   @unique
+  postedAt DateTime
+  isRumour Boolean  @default(false) // Tag to identify unverified claims
+
+  politicianId String
+  politician   Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("social_mentions")
+}

@@ -1,0 +1,38 @@
+name: Daily Politicians Web Scraper
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Runs at 02:00 UTC Daily
+  workflow_dispatch: # Allows manual trigger from GH Actions UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node (For Prisma CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install Python Dependencies & Generate Prisma
+        working-directory: ./python-service
+        run: |
+          pip install -r requirements.txt
+          # The prisma python client uses node generator under the hood
+          prisma generate --schema=../prisma/schema.prisma
+          
+      - name: Execute Scraper
+        working-directory: ./python-service
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: python main_scraper.py
