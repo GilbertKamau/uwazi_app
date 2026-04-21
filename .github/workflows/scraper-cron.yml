@@ -32,9 +32,7 @@ jobs:
         run: npm i -g prisma
 
       - name: Generate Prisma Client (JS + Python)
-        run: |
-          npx prisma generate --generator client
-          python3 -m prisma generate --schema ./prisma/schema.prisma
+        run: npx prisma generate --schema ./prisma/schema.prisma
           
       - name: Execute Scraper
         working-directory: ./python-service

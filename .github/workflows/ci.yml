@@ -17,9 +17,7 @@ jobs:
           python-version: "3.11"
 
       - name: Prisma Sync
-        run: |
-          npx prisma generate --generator client
-          python3 -m prisma generate --schema prisma/schema.prisma
+        run: npx prisma generate --schema prisma/schema.prisma
       - name: Deploy Database
         run: npx prisma migrate deploy
         env:
