@@ -5,6 +5,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator client_py {
+  provider = "prisma-client-py"
+  output   = "../python-service/prisma"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
