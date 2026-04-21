@@ -16,8 +16,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install prisma-client-py generator
-        run: pip install prisma-client-py
+      - name: Install Prisma Python client
+        run: pip install prisma
 
       - name: Prisma Sync
         run: npx prisma generate
