@@ -23,7 +23,7 @@ jobs:
           echo "$(python -m site --user-base)/bin" >> $GITHUB_PATH
 
       - name: Prisma Sync
-        run: npx prisma generate --schema prisma/schema.prisma
+        run: npx prisma generate --schema prisma/schema.prisma --generator client
       - name: Deploy Database
         run: npx prisma migrate deploy
         env:
