@@ -16,11 +16,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Prisma Python client
-        run: pip install prisma
-
       - name: Prisma Sync
-        run: npx prisma generate
+        run: |
+          npx prisma generate --generator client
+          python3 -m prisma generate --schema prisma/schema.prisma
       - name: Deploy Database
         run: npx prisma migrate deploy
         env:

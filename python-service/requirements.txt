@@ -3,4 +3,4 @@ uvicorn[standard]
 apify-client
 python-dotenv
 psycopg2-binary
-prisma
+prisma==0.15.0

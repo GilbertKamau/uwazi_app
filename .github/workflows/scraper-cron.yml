@@ -31,9 +31,10 @@ jobs:
       - name: Install Prisma CLI (Node)
         run: npm i -g prisma
 
-      - name: Generate Prisma Client (Python)
+      - name: Generate Prisma Client (JS + Python)
         run: |
-          prisma generate --schema=./prisma/schema.prisma
+          npx prisma generate --generator client
+          python3 -m prisma generate --schema ./prisma/schema.prisma
           
       - name: Execute Scraper
         working-directory: ./python-service
