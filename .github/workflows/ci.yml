@@ -19,7 +19,7 @@ jobs:
       - name: Install Prisma Python client
         run: |
           python -m pip install --upgrade pip
-          pip install prisma
+          pip install "prisma==0.15.0"
           echo "$(python -m site --user-base)/bin" >> $GITHUB_PATH
 
       - name: Prisma Sync
