@@ -9,6 +9,7 @@ const {
   KENYA_COUNTIES,
 } = require('../utils/constants');
 const { cleanText, isSafeHttpUrl } = require('../utils/sanitize');
+const { isOwnStorageUrl } = require('../lib/storage');
 
 const trimmed = (min, max) =>
   z
@@ -16,11 +17,25 @@ const trimmed = (min, max) =>
     .transform(cleanText)
     .pipe(z.string().min(min).max(max));
 
+// Evidence links must point at our own storage bucket (files are attached via
+// multipart upload). Arbitrary third-party URLs are rejected: the UI renders
+// them, so they would be a tracking / phishing vector.
 const evidenceArray = z
-  .array(z.string().max(2048).refine(isSafeHttpUrl, 'Evidence must be an http(s) URL'))
+  .array(
+    z
+      .string()
+      .max(2048)
+      .refine(isSafeHttpUrl, 'Evidence must be an http(s) URL')
+      .refine(isOwnStorageUrl, 'Evidence must be uploaded through Uwazi'),
+  )
   .max(10, 'At most 10 evidence links')
   .optional()
   .default([]);
+
+// multipart/form-data sends every field as a string ("false" must not be truthy).
+const booleanish = z
+  .union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')])
+  .optional();
 
 const reportCreateSchema = z.object({
   title: trimmed(5, 160),
@@ -28,7 +43,7 @@ const reportCreateSchema = z.object({
   category: z.enum(REPORT_CATEGORIES),
   county: z.enum(KENYA_COUNTIES),
   location: z.string().transform(cleanText).pipe(z.string().max(200)).optional(),
-  isAnonymous: z.coerce.boolean().optional().default(true),
+  isAnonymous: booleanish.default(true),
   authorName: z.string().transform(cleanText).pipe(z.string().max(120)).optional(),
   evidence: evidenceArray,
 });
@@ -41,9 +56,9 @@ const reportUpdateSchema = z
     county: z.enum(KENYA_COUNTIES).optional(),
     location: z.string().transform(cleanText).pipe(z.string().max(200)).optional(),
     priority: z.enum(REPORT_PRIORITIES).optional(),
-    evidence: evidenceArray.optional(),
-  })
-  .refine((v) => Object.keys(v).length > 0, 'No updatable fields provided');
+    // multipart PUT: JSON-encoded list of existing evidence URLs to keep.
+    existingEvidence: z.string().max(20000).optional(),
+  });
 
 const reportStatusSchema = z.object({
   status: z.enum(REPORT_STATUSES),

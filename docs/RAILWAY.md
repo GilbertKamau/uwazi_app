@@ -17,9 +17,24 @@ Production URL: `https://api.uwazi.space` (custom domain → Railway service).
 | `SUPABASE_ANON_KEY` | the project's publishable key | Public by design. |
 | `CORS_ORIGINS` | `https://www.uwazi.space,https://uwazi.space` | Comma-separated. Add a Vercel preview origin only if needed. Defaults to localhost only. |
 | `ADMIN_EMAILS` | comma-separated emails | Granted `admin` on first sign-in. |
+| `SUPABASE_SERVICE_KEY` | project service-role key | Evidence uploads. Already set on the current deployment; keep it. Never expose it to a client. |
+| `EVIDENCE_BUCKET` | `uwazi-evidence` (default) | Bucket in the `SUPABASE_URL` project. Public today, so evidence URLs are world-readable. |
+| `LEGACY_PROXY_TARGET` | `http://localhost:8000` | Needed to keep `/api/legacy` (Python analytics) working; it is opt-in now. |
 | `ENABLE_API_DOCS` | `false` | Swagger UI off in prod. |
 
 Never commit real DB credentials; set them only in Railway.
+
+## What changed vs. the previously deployed API
+
+- Writes are authenticated: `PUT`/`PATCH status` need a reviewer/admin, `DELETE` an admin
+  (Supabase JWT in `Authorization: Bearer`). Previously these were open to anyone.
+- `GET /api/reports` returns `{ data, pagination }` and honours `category`, `county`,
+  `status`, `q`, `limit`, `skip` (it used to return a bare array and ignore them).
+- Report detail no longer exposes author or commenter emails.
+- `POST /api/reports` still accepts multipart `evidence` files (same field name), now
+  with a file-signature check and the write rate limit; `isAnonymous` is parsed correctly
+  from multipart strings. Failed files are listed in `failedUploads`.
+- New: `POST /api/reports/:id/upvote`, rate-limited.
 
 ## Migrations
 

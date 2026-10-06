@@ -10,8 +10,10 @@ const notFound = (_req, res) => {
 
 // eslint-disable-next-line no-unused-vars
 const errorHandler = (err, _req, res, _next) => {
+  // Stack traces for server faults only; 4xx are client mistakes (bad upload etc.).
+  const loggedStatus = err.status || err.statusCode || 500;
   // eslint-disable-next-line no-console
-  console.error('[error]', err.stack || err.message || err);
+  if (loggedStatus >= 500) console.error('[error]', err.stack || err.message || err);
 
   // Body parser / malformed JSON
   if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) {

@@ -86,6 +86,7 @@ app.use('/api/users', require('./src/routes/userRoutes'));
 app.use('/api/comments', require('./src/routes/commentRoutes'));
 app.use('/api/metrics', require('./src/routes/metricsRoutes'));
 app.use('/api/signals', require('./src/routes/signalRoutes'));
+app.use('/api/politicians', require('./src/routes/politicianRoutes'));
 
 // --- Legacy Python analytics proxy (opt-in only) ---
 if (config.legacyProxyTarget) {

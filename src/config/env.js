@@ -44,6 +44,11 @@ const config = {
   // Optional: enables fast local HS256 verification without a network call.
   supabaseJwtSecret: optional('SUPABASE_JWT_SECRET', undefined),
 
+  // Evidence file storage. The service key bypasses RLS: server-side only.
+  // Without it, report creation still works but attached files are skipped.
+  supabaseServiceKey: optional('SUPABASE_SERVICE_KEY', undefined),
+  evidenceBucket: optional('EVIDENCE_BUCKET', 'uwazi-evidence'),
+
   // Toggle the interactive API docs. Off by default in production.
   enableApiDocs: optional('ENABLE_API_DOCS', isProd ? 'false' : 'true') === 'true',
 

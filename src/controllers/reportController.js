@@ -7,6 +7,7 @@
 // from the authenticated session - never from client-supplied fields.
 
 const prisma = require('../lib/prisma');
+const storage = require('../lib/storage');
 
 // Public shape of a report in list views. No author identity leaks here.
 const listSelect = {
@@ -66,6 +67,11 @@ const createReport = async (req, res) => {
       resolvedAuthorName = authorName || req.user.name;
     }
 
+    // Files from a multipart request (validated by middleware/upload.js), plus any
+    // already-stored evidence URLs sent in JSON (validated by the schema).
+    const { urls: uploadedUrls, failed } = await storage.uploadFiles(req.files);
+    const allEvidence = [...(evidence || []), ...uploadedUrls].slice(0, 10);
+
     const report = await prisma.report.create({
       data: {
         title,
@@ -76,7 +82,7 @@ const createReport = async (req, res) => {
         isAnonymous: anonymous,
         authorName: resolvedAuthorName,
         authorId,
-        evidence: evidence || [],
+        evidence: allEvidence,
         status: 'pending',
         priority: 'medium',
         upvotes: 0,
@@ -84,7 +90,12 @@ const createReport = async (req, res) => {
       select: listSelect,
     });
 
-    res.status(201).json({ message: 'Report submitted successfully', data: presentReport(report) });
+    res.status(201).json({
+      message: 'Report submitted successfully',
+      data: presentReport(report),
+      // Names of attached files that could not be stored (empty when all succeeded).
+      ...(failed.length > 0 && { failedUploads: failed }),
+    });
   } catch (error) {
     console.error('Error creating report:', error.message);
     res.status(500).json({ error: 'Failed to create report' });
@@ -169,17 +180,20 @@ const getReportById = async (req, res) => {
   }
 };
 
-// UPDATE - Edit report content (staff only)
+// UPDATE - Edit report content and evidence (staff only)
 const updateReport = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const existing = await prisma.report.findUnique({ where: { id }, select: { id: true } });
+    const existing = await prisma.report.findUnique({
+      where: { id },
+      select: { id: true, evidence: true },
+    });
     if (!existing) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    const { title, description, category, county, location, priority, evidence } = req.body;
+    const { title, description, category, county, location, priority, existingEvidence } = req.body;
     const data = {};
     if (title !== undefined) data.title = title;
     if (description !== undefined) data.description = description;
@@ -187,7 +201,34 @@ const updateReport = async (req, res) => {
     if (county !== undefined) data.county = county;
     if (location !== undefined) data.location = location;
     if (priority !== undefined) data.priority = priority;
-    if (evidence !== undefined) data.evidence = evidence;
+
+    // Evidence: keep the listed existing URLs (default: all), then append new uploads.
+    const hasFiles = Array.isArray(req.files) && req.files.length > 0;
+    if (existingEvidence !== undefined || hasFiles) {
+      let kept = existing.evidence;
+      if (existingEvidence !== undefined) {
+        let parsed;
+        try {
+          parsed = JSON.parse(existingEvidence);
+        } catch {
+          return res.status(400).json({ error: 'existingEvidence must be a JSON array of URLs' });
+        }
+        if (!Array.isArray(parsed)) {
+          return res.status(400).json({ error: 'existingEvidence must be a JSON array of URLs' });
+        }
+        // Only URLs that are already on the report may be kept.
+        kept = parsed.filter((u) => existing.evidence.includes(u));
+      }
+      const { urls } = await storage.uploadFiles(req.files);
+      data.evidence = [...kept, ...urls].slice(0, 10);
+
+      // Drop storage objects that were removed from the report.
+      await storage.removeByUrls(existing.evidence.filter((u) => !data.evidence.includes(u)));
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'No updatable fields provided' });
+    }
 
     const updated = await prisma.report.update({ where: { id }, data, select: listSelect });
     res.status(200).json({ message: 'Report updated', data: presentReport(updated) });
@@ -201,11 +242,16 @@ const updateReport = async (req, res) => {
 const deleteReport = async (req, res) => {
   try {
     const { id } = req.params;
-    const report = await prisma.report.findUnique({ where: { id }, select: { id: true } });
+    const report = await prisma.report.findUnique({
+      where: { id },
+      select: { id: true, evidence: true },
+    });
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
     await prisma.report.delete({ where: { id } });
+    // Best effort: a storage hiccup must not undo the delete.
+    await storage.removeByUrls(report.evidence);
     res.status(200).json({ message: 'Report deleted' });
   } catch (error) {
     console.error('Error deleting report:', error.message);

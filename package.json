@@ -1,14 +1,12 @@
 {
   "name": "uwazi-backend",
   "version": "1.0.0",
-  "description": "Backend for the Uwazi corruption-reporting platform",
+  "description": "Backend for Social Justice tracking application",
   "main": "app.js",
-  "engines": {
-    "node": ">=18"
-  },
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "migrate": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy"
   },
@@ -16,8 +14,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "5.8.0",
     "@supabase/supabase-js": "^2.112.4",
+    "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.22.1",
@@ -25,12 +24,14 @@
     "helmet": "^8.3.0",
     "http-proxy-middleware": "^3.0.5",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "node-cache": "^5.1.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
-    "prisma": "^5.22.0"
+    "prisma": "5.8.0"
   }
 }

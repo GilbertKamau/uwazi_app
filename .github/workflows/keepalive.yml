@@ -1,0 +1,34 @@
+name: Supabase Keepalive
+
+on:
+  schedule:
+    # Run every Monday, Wednesday, and Friday at 08:00 UTC
+    - cron: '0 8 * * 1,3,5'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    environment: SUPABASE_URL
+    steps:
+      - name: Ping Supabase Database (REST & GraphQL)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_KEY:-}" ]; then
+            echo "::error::Missing SUPABASE_URL and/or SUPABASE_SERVICE_KEY. Ensure they are set in the 'SUPABASE_URL' environment secrets."
+            exit 1
+          fi
+
+          echo "Pinging Supabase REST endpoint to keep project active..."
+          curl -s -X GET "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" > /dev/null
+          
+          echo "Pinging Supabase Auth endpoint..."
+          curl -s -X GET "${SUPABASE_URL}/auth/v1/health" \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" > /dev/null
+            
+          echo "Ping successful!"
