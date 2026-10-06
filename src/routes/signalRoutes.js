@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const metricsController = require('../controllers/metricsController');
+const { writeLimiter } = require('../middleware/rateLimit');
 
 /**
  * @swagger
@@ -37,6 +38,6 @@ const metricsController = require('../controllers/metricsController');
  *       400:
  *         description: Validation error
  */
-router.post('/', metricsController.submitSignal);
+router.post('/', writeLimiter, metricsController.submitSignal);
 
 module.exports = router;

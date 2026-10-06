@@ -1,5 +1,6 @@
-// This is your Prisma schema file,
-// 1. The `url` property inside the `datasource` block is correctly written for older Prisma versions, but in Prisma 5.7.0+ (aka Prisma 7), connection URLs for migrations must go in `prisma.config.ts`, not here. However, usage inside the Prisma Client itself (for running `prisma generate` and runtime usage) is still supported, so for most use-cases (and local development), the following is still valid unless ONLY using migrations.
+// Uwazi Prisma schema (PostgreSQL). Pinned to Prisma 5.x.
+// DATABASE_URL = pooled connection (app runtime)
+// DIRECT_URL   = direct connection (migrations)
 
 generator client {
   provider = "prisma-client-js"
@@ -63,6 +64,12 @@ model Report {
   comments Comment[]
   tags     Tag[]
 
+  // Indexes for the filterable public feed
+  @@index([status])
+  @@index([category])
+  @@index([county])
+  @@index([createdAt])
+  @@index([authorId])
   @@map("reports")
 }
 
@@ -76,6 +83,8 @@ model Comment {
   author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
 
+  @@index([reportId])
+  @@index([authorId])
   @@map("comments")
 }
 

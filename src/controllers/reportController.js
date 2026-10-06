@@ -1,287 +1,260 @@
 // Report Controller
-// Handles all business logic for Report operations
+// Business logic for Report operations.
+//
+// Anonymity is the security-critical property here. A report submitted with
+// isAnonymous=true is NEVER linked to a user row and never carries an author
+// name, even if the submitter was signed in. Author identity is only ever set
+// from the authenticated session - never from client-supplied fields.
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
-// CREATE - Create a new report
+// Public shape of a report in list views. No author identity leaks here.
+const listSelect = {
+  id: true,
+  title: true,
+  description: true,
+  category: true,
+  county: true,
+  location: true,
+  status: true,
+  priority: true,
+  upvotes: true,
+  evidence: true,
+  isAnonymous: true,
+  authorName: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: { select: { comments: true } },
+};
 
-// CREATE - Create a new report
+// Strip any author identity from an anonymous report before it leaves the API.
+function presentReport(report) {
+  if (!report) return report;
+  if (report.isAnonymous) {
+    const { author, authorName, authorId, ...safe } = report;
+    return { ...safe, authorName: null };
+  }
+  return report;
+}
+
+// CREATE - Create a new report (public; anonymous by default)
 const createReport = async (req, res) => {
   try {
-    const { 
-      title, 
-      category, 
-      description, 
-      county,      // Matches the "Select county" dropdown
-      location,    // Matches "Specific area"
-      isAnonymous, // Matches the safety checkbox
-      authorId,    // Logged in user ID (if any)
-      authorName,  // Matches the "Your Name" input
-      evidence     // Array of strings (URLs)
+    const {
+      title,
+      description,
+      category,
+      county,
+      location,
+      isAnonymous,
+      authorName,
+      evidence,
     } = req.body;
 
-    // 1. Validate required fields based on UI (marked with * in screenshot)
-    if (!title || !category || !description || !county) {
-      return res.status(400).json({ 
-        error: 'Please fill in all required fields: Title, Category, Description, and County' 
-      });
+    const anonymous = isAnonymous !== false; // default to anonymous
+
+    // Identity is derived from the session only.
+    let authorId = null;
+    let resolvedAuthorName = null;
+    if (!anonymous) {
+      if (!req.user) {
+        return res
+          .status(401)
+          .json({ error: 'Sign in to submit a non-anonymous report, or submit anonymously.' });
+      }
+      authorId = req.user.id;
+      resolvedAuthorName = authorName || req.user.name;
     }
 
-    // 2. Create the report in the database
     const report = await prisma.report.create({
       data: {
         title,
-        category,
         description,
+        category,
         county,
         location: location || null,
-        isAnonymous: !!isAnonymous,
-        // UI logic: If anonymous, use the default string; otherwise, use the provided name
-        authorName: isAnonymous ? "Anonymous Report" : (authorName || "Guest User"),
-        // Database logic: Keep the relation if logged in, but the UI will hide it if anonymous
-        authorId: authorId || null,
-        // Matches the String[] type in schema
+        isAnonymous: anonymous,
+        authorName: resolvedAuthorName,
+        authorId,
         evidence: evidence || [],
-        status: 'pending', // Default status for new reports
-        priority: 'medium', // Default priority
-        upvotes: 0
+        status: 'pending',
+        priority: 'medium',
+        upvotes: 0,
       },
-      // Include author details in the response to update the UI feed immediately
-      include: {
-        author: {
-          select: { name: true, role: true }
-        }
-      }
+      select: listSelect,
     });
 
-    res.status(201).json({ 
-      message: 'Report submitted successfully', 
-      data: report 
-    });
+    res.status(201).json({ message: 'Report submitted successfully', data: presentReport(report) });
   } catch (error) {
-    console.error('Prisma Error:', error);
-    res.status(500).json({ error: 'Failed to create report. Ensure the database is synced.' });
+    console.error('Error creating report:', error.message);
+    res.status(500).json({ error: 'Failed to create report' });
   }
 };
 
-// READ - Get all reports (Optimized for the Feed in image_23e093.png)
+// READ - Get all reports (public feed, paginated + filterable)
 const getAllReports = async (req, res) => {
   try {
-    const reports = await prisma.report.findMany({
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        category: true,
-        county: true,
-        location: true,
-        createdAt: true,
-        isAnonymous: true,
-        authorName: true,
-        status: true,
-        _count: {
-          select: { 
-            comments: true, // For the "67" comments icon in UI
-            upvotes: true   // For the "312" upvote icon in UI
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    const { limit, skip, category, county, status, q } = req.query;
 
-    res.status(200).json(reports);
+    const where = {};
+    if (category) where.category = category;
+    if (county) where.county = county;
+    if (status) where.status = status;
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [reports, total] = await Promise.all([
+      prisma.report.findMany({
+        where,
+        select: listSelect,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.report.count({ where }),
+    ]);
+
+    res.status(200).json({
+      data: reports.map(presentReport),
+      pagination: { total, limit, skip },
+    });
   } catch (error) {
+    console.error('Error fetching reports:', error.message);
     res.status(500).json({ error: 'Failed to fetch reports' });
   }
 };
-
-// // READ - Get all reports with filters
-// const getAllReports = async (req, res) => {
-//   try {
-//     const { status, category, priority, authorId, limit = 10, skip = 0 } = req.query;
-
-//     // Build filter object
-//     const where = {};
-//     if (status) where.status = status;
-//     if (category) where.category = category;
-//     if (priority) where.priority = priority;
-//     if (authorId) where.authorId = authorId;
-
-//     // Fetch reports with pagination
-//     const reports = await prisma.report.findMany({
-//       where,
-//       include: {
-//         author: {
-//           select: { id: true, name: true, email: true }
-//         },
-//         comments: {
-//           select: { id: true, content: true }
-//         }
-//       },
-//       orderBy: { createdAt: 'desc' },
-//       take: parseInt(limit),
-//       skip: parseInt(skip)
-//     });
-
-//     // Get total count for pagination
-//     const total = await prisma.report.count({ where });
-
-//     res.status(200).json({
-//       data: reports,
-//       pagination: {
-//         total,
-//         limit: parseInt(limit),
-//         skip: parseInt(skip)
-//       }
-//     });
-//   } catch (error) {
-//     console.error('Error fetching reports:', error);
-//     res.status(500).json({ error: 'Failed to fetch reports' });
-//   }
-// };
 
 // READ - Get a single report by ID
 const getReportById = async (req, res) => {
   try {
     const { id } = req.params;
+    const isStaff = req.user && (req.user.role === 'admin' || req.user.role === 'reviewer');
 
     const report = await prisma.report.findUnique({
       where: { id },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true, role: true }
-        },
+      select: {
+        ...listSelect,
+        author: { select: { id: true, name: true, role: true } },
         comments: {
-          include: {
-            author: {
-              select: { id: true, name: true, email: true }
-            }
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            author: { select: { id: true, name: true } },
           },
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: 'desc' },
+          take: 100,
         },
-        tags: {
-          select: { id: true, name: true }
-        }
-      }
+        tags: { select: { id: true, name: true } },
+      },
     });
 
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    res.status(200).json(report);
+    // Only staff may see the (non-anonymous) author relation.
+    if (!isStaff && report.author) {
+      delete report.author;
+    }
+
+    res.status(200).json({ data: presentReport(report) });
   } catch (error) {
-    console.error('Error fetching report:', error);
+    console.error('Error fetching report:', error.message);
     res.status(500).json({ error: 'Failed to fetch report' });
   }
 };
 
-// UPDATE - Update a report
+// UPDATE - Edit report content (staff only)
 const updateReport = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, category, priority, location, date, figmaLink, figmaFields } = req.body;
 
-    // Check if report exists
-    const existingReport = await prisma.report.findUnique({ where: { id } });
-    if (!existingReport) {
+    const existing = await prisma.report.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Update report
-    const updatedReport = await prisma.report.update({
-      where: { id },
-      data: {
-        ...(title && { title }),
-        ...(description !== undefined && { description }),
-        ...(category && { category }),
-        ...(priority && { priority }),
-        ...(location !== undefined && { location }),
-        ...(date && { date: new Date(date) }),
-        ...(figmaLink !== undefined && { figmaLink }),
-        ...(figmaFields && { figmaFields })
-      },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true }
-        }
-      }
-    });
+    const { title, description, category, county, location, priority, evidence } = req.body;
+    const data = {};
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (category !== undefined) data.category = category;
+    if (county !== undefined) data.county = county;
+    if (location !== undefined) data.location = location;
+    if (priority !== undefined) data.priority = priority;
+    if (evidence !== undefined) data.evidence = evidence;
 
-    res.status(200).json({
-      message: 'Report updated successfully',
-      data: updatedReport
-    });
+    const updated = await prisma.report.update({ where: { id }, data, select: listSelect });
+    res.status(200).json({ message: 'Report updated', data: presentReport(updated) });
   } catch (error) {
-    console.error('Error updating report:', error);
+    console.error('Error updating report:', error.message);
     res.status(500).json({ error: 'Failed to update report' });
   }
 };
 
-// DELETE - Delete a report
+// DELETE - Remove a report (admin only)
 const deleteReport = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Check if report exists
-    const report = await prisma.report.findUnique({ where: { id } });
+    const report = await prisma.report.findUnique({ where: { id }, select: { id: true } });
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
-
-    // Delete report (comments will cascade delete)
-    await prisma.report.delete({
-      where: { id }
-    });
-
-    res.status(200).json({
-      message: 'Report deleted successfully'
-    });
+    await prisma.report.delete({ where: { id } });
+    res.status(200).json({ message: 'Report deleted' });
   } catch (error) {
-    console.error('Error deleting report:', error);
+    console.error('Error deleting report:', error.message);
     res.status(500).json({ error: 'Failed to delete report' });
   }
 };
 
-// CHANGE STATUS - Update report status
+// PATCH - Update workflow status (staff only)
 const updateReportStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
-    // Validate status
-    const validStatuses = ['pending', 'reviewing', 'resolved', 'closed'];
-    if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({ 
-        error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
-      });
-    }
-
-    // Check if report exists
-    const report = await prisma.report.findUnique({ where: { id } });
+    const report = await prisma.report.findUnique({ where: { id }, select: { id: true } });
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Update status
-    const updatedReport = await prisma.report.update({
+    const updated = await prisma.report.update({
       where: { id },
       data: { status },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true }
-        }
-      }
+      select: listSelect,
     });
-
-    res.status(200).json({
-      message: `Report status updated to '${status}'`,
-      data: updatedReport
-    });
+    res.status(200).json({ message: `Report status updated to '${status}'`, data: presentReport(updated) });
   } catch (error) {
-    console.error('Error updating report status:', error);
+    console.error('Error updating report status:', error.message);
     res.status(500).json({ error: 'Failed to update report status' });
+  }
+};
+
+// POST /:id/upvote - Register a supporting vote.
+// Abuse is bounded by the upvote rate limiter; the client also self-limits to
+// one vote per report per browser.
+const upvoteReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const report = await prisma.report.findUnique({ where: { id }, select: { id: true } });
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+    const updated = await prisma.report.update({
+      where: { id },
+      data: { upvotes: { increment: 1 } },
+      select: { id: true, upvotes: true },
+    });
+    res.status(200).json({ data: updated });
+  } catch (error) {
+    console.error('Error upvoting report:', error.message);
+    res.status(500).json({ error: 'Failed to upvote report' });
   }
 };
 
@@ -291,6 +264,6 @@ module.exports = {
   getReportById,
   updateReport,
   deleteReport,
-  updateReportStatus
+  updateReportStatus,
+  upvoteReport,
 };
-

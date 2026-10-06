@@ -1,48 +1,9 @@
-// Middleware to require admin role for protected routes
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+// Deprecated: the old X-User-Id header check was trivially spoofable.
+// Kept as a thin alias so existing imports keep working; it now enforces a
+// verified Supabase session with the admin role.
 
-/**
- * Requires the request to include a valid admin user.
- * Expects X-User-Id header with the authenticated user's ID.
- * Verifies the user exists and has role === 'admin'.
- */
-const requireAdmin = async (req, res, next) => {
-  const userId = req.headers['x-user-id'];
+const { requireAuth, requireRole } = require('./auth');
 
-  if (!userId) {
-    return res.status(401).json({
-      error: 'Admin access required',
-      message: 'Missing X-User-Id header. Please authenticate as an admin user.',
-    });
-  }
-
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, role: true },
-    });
-
-    if (!user) {
-      return res.status(401).json({
-        error: 'Admin access required',
-        message: 'User not found.',
-      });
-    }
-
-    if (user.role !== 'admin') {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Admin role required to access this resource.',
-      });
-    }
-
-    req.adminUser = user;
-    next();
-  } catch (error) {
-    console.error('requireAdmin middleware error:', error);
-    res.status(500).json({ error: 'Failed to verify admin access' });
-  }
-};
+const requireAdmin = [requireAuth, requireRole('admin')];
 
 module.exports = { requireAdmin };

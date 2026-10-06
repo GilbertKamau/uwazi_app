@@ -191,7 +191,7 @@ const submitSignal = async (req, res) => {
       }
     }
 
-    if (source && (!typeof source === 'string' || !ALLOWED_SOURCES.includes(source))) {
+    if (source !== undefined && (typeof source !== 'string' || !ALLOWED_SOURCES.includes(source))) {
       errors.push('Source is not allowed.');
     }
 
@@ -229,8 +229,8 @@ const submitSignal = async (req, res) => {
 
     res.status(201).json({ ok: true, signal: normalized });
   } catch (error) {
-    console.error('Error submitting signal:', error);
-    res.status(500).json({ error: 'Failed to submit signal', details: error.message });
+    console.error('Error submitting signal:', error.message);
+    res.status(500).json({ error: 'Failed to submit signal' });
   }
 };
 

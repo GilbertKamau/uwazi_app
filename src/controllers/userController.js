@@ -1,311 +1,154 @@
 // User Controller
-// Handles all business logic for User operations
+// User rows are provisioned automatically by the auth middleware on first
+// authenticated request. These endpoints are for reading/administering them.
+// Passwords and sign-in are handled entirely by Supabase Auth.
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
-// CREATE - Register a new user
-const createUser = async (req, res) => {
-  try {
-    const { email, name, role = 'viewer',isAnonymousGuest } = req.body;
-
-    // Validate required fields
-    if (!email || !name) {
-      return res.status(400).json({ error: 'Email and name are required' });
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
-    }
-
-    // Validate role
-    const validRoles = ['admin', 'reviewer', 'viewer'];
-    if (role && !validRoles.includes(role)) {
-      return res.status(400).json({ 
-        error: `Invalid role. Must be one of: ${validRoles.join(', ')}` 
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
-      return res.status(409).json({ error: 'User with this email already exists' });
-    }
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        role
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true
-      }
-    });
-
-    res.status(201).json({
-      message: 'User created successfully',
-      data: user
-    });
-  } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({ error: 'Failed to create user' });
-  }
+const publicUserSelect = {
+  id: true,
+  name: true,
+  role: true,
+  createdAt: true,
 };
-// Updated Login Logic for "Continue Anonymously"
-const loginUser = async (req, res) => {
-  const { email, password, isAnonymousGuest } = req.body;
 
-  if (isAnonymousGuest) {
-    // Logic for creating a temporary session without an account
-    return res.status(200).json({ 
-      message: 'Browsing as Guest', 
-      user: { role: 'viewer', isAnonymous: true } 
-    });
-  }
+const adminUserSelect = {
+  ...publicUserSelect,
+  email: true,
+  updatedAt: true,
+  _count: { select: { reports: true, comments: true } },
 };
-// READ - Get all users
+
+// GET /api/users/me - the caller's own profile
+const getMe = async (req, res) => {
+  res.status(200).json({ data: req.user });
+};
+
+// GET /api/users - list users (admin only)
 const getAllUsers = async (req, res) => {
   try {
-    const { role, limit = 10, skip = 0 } = req.query;
-
-    // Build filter object
+    const { role, limit, skip } = req.query;
     const where = {};
     if (role) where.role = role;
 
-    // Fetch users with pagination
-    const users = await prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            reports: true,
-            comments: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit),
-      skip: parseInt(skip)
-    });
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: adminUserSelect,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.user.count({ where }),
+    ]);
 
-    // Get total count for pagination
-    const total = await prisma.user.count({ where });
-
-    res.status(200).json({
-      data: users,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        skip: parseInt(skip)
-      }
-    });
+    res.status(200).json({ data: users, pagination: { total, limit, skip } });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Error fetching users:', error.message);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 };
 
-// READ - Get a single user by ID
+// GET /api/users/:id - single user (admin, or the user themselves)
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
+    const isSelf = req.user.id === id;
+    const isAdmin = req.user.role === 'admin';
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-        reports: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            createdAt: true
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 5
-        },
-        comments: {
-          select: {
-            id: true,
-            content: true,
-            createdAt: true
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 5
-        },
-        _count: {
-          select: {
-            reports: true,
-            comments: true
-          }
-        }
-      }
+      select: isAdmin || isSelf ? adminUserSelect : publicUserSelect,
     });
-
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-
-    res.status(200).json(user);
+    res.status(200).json({ data: user });
   } catch (error) {
-    console.error('Error fetching user:', error);
+    console.error('Error fetching user:', error.message);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 };
 
-// UPDATE - Update user details
+// PUT /api/users/:id - update profile (self or admin). Email is owned by
+// Supabase and cannot be changed here.
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email } = req.body;
+    if (req.user.id !== id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({ where: { id } });
-    if (!existingUser) {
+    const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // If email is being updated, check for duplicates
-    if (email && email !== existingUser.email) {
-      const emailExists = await prisma.user.findUnique({
-        where: { email }
-      });
-      if (emailExists) {
-        return res.status(409).json({ error: 'Email already in use' });
-      }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({ error: 'Invalid email format' });
-      }
-    }
-
-    // Update user
-    const updatedUser = await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id },
-      data: {
-        ...(name && { name }),
-        ...(email && { email })
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true
-      }
+      data: { name: req.body.name },
+      select: adminUserSelect,
     });
-
-    res.status(200).json({
-      message: 'User updated successfully',
-      data: updatedUser
-    });
+    res.status(200).json({ message: 'Profile updated', data: updated });
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error('Error updating user:', error.message);
     res.status(500).json({ error: 'Failed to update user' });
   }
 };
 
-// DELETE - Delete a user
+// DELETE /api/users/:id - remove a user (admin only)
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Check if user exists
-    const user = await prisma.user.findUnique({ where: { id } });
+    if (req.user.id === id) {
+      return res.status(400).json({ error: 'You cannot delete your own account here' });
+    }
+    const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-
-    // Delete user (reports and comments will cascade delete)
-    await prisma.user.delete({
-      where: { id }
-    });
-
-    res.status(200).json({
-      message: 'User deleted successfully'
-    });
+    await prisma.user.delete({ where: { id } });
+    res.status(200).json({ message: 'User deleted' });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error('Error deleting user:', error.message);
     res.status(500).json({ error: 'Failed to delete user' });
   }
 };
 
-// UPDATE ROLE - Change user role (admin only)
+// PATCH /api/users/:id/role - change a user's role (admin only)
 const updateUserRole = async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
 
-    // Validate role
-    const validRoles = ['admin', 'reviewer', 'viewer'];
-    if (!role || !validRoles.includes(role)) {
-      return res.status(400).json({ 
-        error: `Invalid role. Must be one of: ${validRoles.join(', ')}` 
-      });
+    if (req.user.id === id) {
+      return res.status(400).json({ error: 'You cannot change your own role' });
     }
-
-    // Check if user exists
-    const user = await prisma.user.findUnique({ where: { id } });
+    const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Update role
-    const updatedUser = await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id },
       data: { role },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true
-      }
+      select: adminUserSelect,
     });
-
-    res.status(200).json({
-      message: `User role updated to '${role}'`,
-      data: updatedUser
-    });
+    res.status(200).json({ message: `Role updated to '${role}'`, data: updated });
   } catch (error) {
-    console.error('Error updating user role:', error);
+    console.error('Error updating user role:', error.message);
     res.status(500).json({ error: 'Failed to update user role' });
   }
 };
 
 module.exports = {
-  createUser,
-  loginUser,
+  getMe,
   getAllUsers,
   getUserById,
   updateUser,
   deleteUser,
-  updateUserRole
+  updateUserRole,
 };
-

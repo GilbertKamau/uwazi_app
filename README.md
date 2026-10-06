@@ -1,321 +1,96 @@
-# Uwazi Backend - Social Justice Tracking Application
+# Uwazi Backend
 
-## Project Structure
+Express + Prisma (PostgreSQL) API for the Uwazi corruption-reporting platform.
 
-```
-uwazi-backend/
-├── prisma/
-│   └── schema.prisma      -- Prisma database schema (PostgreSQL)
-├── src/
-│   ├── controllers/       -- Business logic handlers
-│   │   ├── reportController.js
-│   │   ├── userController.js
-│   │   └── commentController.js
-│   └── routes/            -- API endpoint definitions
-│       ├── reportRoutes.js
-│       ├── userRoutes.js
-│       └── commentRoutes.js
-├── app.js                 -- Express server entry point
-├── package.json           -- Dependencies and scripts
-├── .env                   -- Environment variables
-├── .gitignore             -- Git ignore rules
-└── README.md              -- This file
-```
+## Setup
 
-## Setup Instructions
-
-### 1. Install Dependencies
 ```bash
+cd uwazi_backend
 npm install
+cp .env.example .env          # fill in real values (see below)
+
+npx prisma generate
+npx prisma migrate deploy     # applies prisma/migrations against DIRECT_URL
+
+npm run dev                   # http://localhost:5000  (nodemon)
+# or: npm start
 ```
 
-### 2. Configure Environment Variables
-Update `.env` with your Supabase credentials:
-```
-DATABASE_URL=postgresql://user:password@host:port/database
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-supabase-key
-PORT=5000
-NODE_ENV=development
-```
+### Environment (`.env`)
 
-### 3. Set up the Database
-```bash
-npx prisma migrate dev --name init
-```
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Pooled Postgres connection used at runtime |
+| `DIRECT_URL` | Direct Postgres connection used for migrations |
+| `SUPABASE_URL` | Supabase **Auth** project URL (the one the frontend signs in against) |
+| `SUPABASE_ANON_KEY` | Publishable/anon key — used only to verify user tokens |
+| `SUPABASE_JWT_SECRET` | *(optional)* enables fast local HS256 token verification |
+| `CORS_ORIGINS` | Comma-separated allowlist of browser origins |
+| `ADMIN_EMAILS` | Comma-separated emails auto-granted the `admin` role on first sign-in |
+| `ENABLE_API_DOCS` | Swagger UI at `/api-docs` (default: on in dev, off in prod) |
+| `LEGACY_PROXY_TARGET` | *(optional)* base URL of the Python analytics service for `/api/legacy` |
 
-### 4. Start the Server
-**Development:**
-```bash
-npm run dev
-```
+> **Never commit `.env`.** If a secret has been committed, rotate it in Supabase.
 
-**Production:**
-```bash
-npm start
-```
+## Authentication & authorization
 
-The server will run on `http://localhost:5000`
+Identity is **Supabase Auth**. The frontend sends the Supabase access token as
+`Authorization: Bearer <token>`. `src/middleware/auth.js`:
 
-## Database Models
+1. Verifies the token (local HS256 if `SUPABASE_JWT_SECRET` is set, otherwise
+   `supabase.auth.getUser()`), with a short in-process cache.
+2. Maps the identity to a local `users` row by email, creating one on first
+   sign-in (`admin` if the email is in `ADMIN_EMAILS`, else `viewer`).
+3. Attaches `req.user = { id, email, name, role }`.
 
-### User
-- id (unique)
-- email (unique)
-- name
-- role (admin, reviewer, viewer)
-- createdAt, updatedAt
+Middleware: `requireAuth`, `optionalAuth`, `requireRole(...roles)`.
 
-### Report
-- id (unique)
-- title
-- description
-- category
-- status (pending, reviewing, resolved, closed)
-- priority (low, medium, high, critical)
-- figmaLink
-- figmaFields (JSON - flexible Figma data)
-- location
-- date
-- authorId (foreign key to User)
-- createdAt, updatedAt
+## API
 
-### Comment
-- id (unique)
-- content
-- reportId (foreign key to Report)
-- authorId (foreign key to User)
-- createdAt, updatedAt
-
-### Tag
-- id (unique)
-- name (unique)
-- description
-
-## API Endpoints (To be implemented)
+Every list endpoint returns `{ data, pagination }`; single-resource endpoints
+return `{ data, message? }`.
 
 ### Reports
-- `POST /api/reports` - Create a new report
-- `GET /api/reports` - Get all reports
-- `GET /api/reports/:id` - Get a report by ID
-- `PUT /api/reports/:id` - Update a report
-- `DELETE /api/reports/:id` - Delete a report
-- `PATCH /api/reports/:id/status` - Update report status
-
-### Users
-- `POST /api/users` - Create a new user
-- `GET /api/users` - Get all users
-- `GET /api/users/:id` - Get a user by ID
-- `PUT /api/users/:id` - Update a user
-- `DELETE /api/users/:id` - Delete a user
-- `PATCH /api/users/:id/role` - Update user role
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `/api/reports` | public (filters: `category`, `county`, `status`, `q`, `limit`, `skip`) |
+| `GET` | `/api/reports/:id` | public (author identity hidden unless staff) |
+| `POST` | `/api/reports` | public — anonymous by default, rate limited |
+| `POST` | `/api/reports/:id/upvote` | public — rate limited |
+| `PUT` | `/api/reports/:id` | `reviewer` / `admin` |
+| `PATCH` | `/api/reports/:id/status` | `reviewer` / `admin` |
+| `DELETE` | `/api/reports/:id` | `admin` |
 
 ### Comments
-- `POST /api/comments` - Create a comment
-- `GET /api/comments/report/:reportId` - Get comments for a report
-- `GET /api/comments/:id` - Get a comment by ID
-- `PUT /api/comments/:id` - Update a comment
-- `DELETE /api/comments/:id` - Delete a comment
+| `GET` | `/api/comments/report/:reportId` | public |
+| `POST` | `/api/comments` | authenticated |
+| `PUT` / `DELETE` | `/api/comments/:id` | author or `admin` |
 
-## Health Check
-- `GET /health` - Server status
+### Users
+| `GET` | `/api/users/me` | authenticated |
+| `GET` | `/api/users` | `admin` |
+| `GET` / `PUT` | `/api/users/:id` | self or `admin` |
+| `DELETE` | `/api/users/:id` | `admin` |
+| `PATCH` | `/api/users/:id/role` | `admin` |
 
-## Next Steps
-1. Uncomment the route imports in `app.js`
-2. Implement controller logic in each controller file
-3. Uncomment the route handlers in each routes file
-4. Test API endpoints
+### Metrics / Signals
+`GET /api/metrics/stats`, `GET /api/metrics/signal-types` — `admin` only.
+`POST /api/signals` — public, validated, stored group-only (never per individual).
 
+## Security posture
 
- # Member 3 — Data & Integrity Signals Lead
- 
- This README outlines exactly what you need to do for your area. Keep it simple, evidence-based, and focused on patterns rather than individuals.
- 
- ## Responsibilities
- 
- ### Integrity signal system
- You will design and implement the integrity signal system. This includes:
- - Defining signal types
- - Submission logic
- - Aggregation rules
- - "Is This Normal?" checker logic
- 
- ### Data modeling (JSON / Firestore)
- You will define the data structure so signals can be stored, validated, and aggregated.
- 
- ## Deliverables
- 
- ### 1) Signal form
- Build a clear form for users to submit signals.
- - Inputs for each signal type
- - Timestamp and optional context fields
- - Basic client-side validation
- 
- ### 2) Validation logic
- Validate incoming signals before storage.
- - Required fields present
- - Signal types are allowed
- - Values are within acceptable ranges
- - Optional fields are normalized
- 
- ### 3) Aggregated stats (counts, trends)
- Provide summary-level views of signals.
- - Total counts by type and time window
- - Trend indicators (up/down/steady)
- - No individual-level reporting
- 
- ### 4) Basic charts
- Add simple charts to show patterns over time.
- - Bar/line charts for counts by day or week
- - Stacked view for signal categories
- - Clear labels and legends
- 
- ### 5) What you explain to judges
- Use this exact framing:
- - "We avoided accusations by aggregating signals and showing patterns instead of individuals."
- - "Signals are stored with strict validation and only used for group-level insights."
- 
- ## Integrity Signal System Details
- 
- ### Signal types
- Define the list of allowed signal types. Examples:
- - Suspicious timing pattern
- - Repeated unusual submissions
- - Sudden score spikes
- - Multiple submissions from same device
- 
- Keep the list short and meaningful. Each type should have a name and short description.
- 
- ### Submission logic
- The rules for when a signal can be submitted:
- - Must include a valid signal type
- - Must include a timestamp
- - Must pass validation checks
- - Optionally include a short note
- 
- ### Aggregation rules
- Only aggregate on groups, never on individuals.
- - Aggregate by time window (day/week)
- - Aggregate by signal type
- - Provide trend deltas
- 
- ### "Is This Normal?" checker logic
- Provide a simple check to compare new counts against historical baselines.
- - Use a rolling average or median baseline
- - Flag if count exceeds threshold (example: 2x baseline)
- - Output: "Normal" or "Needs Review"
- 
- ## Data Modeling (JSON / Firestore)
- 
- ### Signal record (JSON example)
- {
-   "signalId": "auto-generated",
-   "type": "repeated_unusual_submissions",
-   "timestamp": "2026-01-24T20:10:00Z",
-   "context": {
-     "eventId": "optional",
-     "note": "optional short description"
-   },
-   "source": "form",
-   "version": 1
- }
- 
- ### Aggregated stats (JSON example)
- {
-   "window": "2026-01-24",
-   "type": "repeated_unusual_submissions",
-   "count": 14,
-   "baseline": 6,
-   "trend": "up",
-   "status": "Needs Review"
- }
- 
- ## Cursor Usage Expectations
- 
- ### Logic explanations
- Write short notes explaining:
- - Why a validation rule exists
- - Why an aggregation rule is safe
- 
- ### Conditional flows
- Describe any logic that branches:
- - Valid vs invalid submissions
- - Normal vs Needs Review checks
- 
- ### Data structure refinement
- Keep structures consistent:
- - Use stable field names
- - Keep optional fields in a `context` object
- - Version your records
+`helmet` headers · CORS allowlist · global + per-write rate limits · `zod`
+validation on every write · body size cap (256 kB) · error responses never leak
+stack traces in production · Swagger and the legacy proxy are opt-in.
 
-## Python Implementation (Structure)
+**Anonymity:** a report submitted with `isAnonymous` is never linked to a user
+row or author name, even for a signed-in submitter, and author identity is only
+ever taken from the verified session — never from client-supplied fields.
 
-File layout and purpose:
-- `app.py` CLI entry point for submit, aggregate, and charts.
-- `ny.py` Alias to run `app.py` main.
-- `signals/__init__.py` Package exports.
-- `signals/types.py` Allowed signal types and descriptions.
-- `signals/models.py` Data classes for signal records and aggregates.
-- `signals/utils.py` ISO-8601 helpers and string normalization.
-- `signals/validation.py` Validation and normalization logic.
-- `signals/normality.py` "Is This Normal?" checker.
-- `signals/aggregation.py` Group-only aggregation and trends.
-- `signals/storage.py` JSON storage helpers.
-- `signals/charts.py` Basic charts with matplotlib or ASCII fallback.
-- `signals/form.py` Interactive signal form.
+## Data & Integrity Signals (Python service)
 
-Run examples:
-- `python app.py submit --interactive`
-- `python app.py aggregate --window day`
-- `python app.py charts --window week`
-
-Notes:
-- Signals are stored in `data/signals.json` as a list of JSON records.
-- Charts are written to `output/`.
-
-## Logic Notes
-
-Why a validation rule exists:
-- Timestamp bounds prevent stale or future-dated records from skewing trends.
-- Type allowlist ensures only defined categories enter aggregation.
-- Context length caps keep optional fields safe and consistent.
-
-Why an aggregation rule is safe:
-- Aggregation only groups by window and type, never by individual IDs.
-- Baselines and trends are computed from windowed counts only.
-
-## Conditional Flows
-
-Valid vs invalid submissions:
-- Valid signals are normalized and stored.
-- Invalid signals return a clear error message and are not stored.
-
-Normal vs Needs Review checks:
-- If count exceeds the baseline threshold, status is "Needs Review".
-- Otherwise the status remains "Normal".
-
-## Frontend Integration (HTTP Endpoints)
-
-This project can be used by a frontend via these endpoints (served by `api.py`):
-
-- `GET /health` -> server health
-- `GET /signal-types` -> list allowed signal types
-- `POST /signals` -> submit a new signal (validated + stored)
-- `GET /stats?window=day|week` -> group-only aggregated stats (safe for judges)
-
-Run the API server:
-- **No-install option (recommended here)**: `python simple_api.py`
-- Optional FastAPI option (needs internet/PyPI access):
-  - Install deps: `python -m pip install -r requirements.txt`
-  - Start server: `python -m uvicorn api:app --reload --port 8000`
-
-Example `POST /signals` body:
-```json
-{
-  "type": "repeated_unusual_submissions",
-  "timestamp": "2026-01-24T20:10:00Z",
-  "context": { "eventId": "optional", "note": "optional short description" }
-}
-```
- 
-
+`python-service/` contains the optional analytics service (signal submission,
+group-only aggregation, "Is this normal?" checks, charts). Run it separately and
+point `LEGACY_PROXY_TARGET` at it, or use the Node `/api/signals` +
+`/api/metrics` endpoints which reimplement the same logic. Signals are stored in
+`data/signals.json`.

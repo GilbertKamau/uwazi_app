@@ -1,209 +1,122 @@
 // Comment Controller
-// Handles all business logic for Comment operations
+// All writes require authentication; the author is always the signed-in user.
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
-// CREATE - Create a new comment on a report
+const commentSelect = {
+  id: true,
+  content: true,
+  reportId: true,
+  createdAt: true,
+  author: { select: { id: true, name: true } },
+};
+
+// POST /api/comments - add a comment (authenticated)
 const createComment = async (req, res) => {
   try {
-    const { content, reportId, authorId } = req.body;
+    const { content, reportId } = req.body;
 
-    // Validate required fields
-    if (!content || !reportId || !authorId) {
-      return res.status(400).json({ 
-        error: 'Content, reportId, and authorId are required' 
-      });
-    }
-
-    // Check if report exists
-    const report = await prisma.report.findUnique({
-      where: { id: reportId }
-    });
-
+    const report = await prisma.report.findUnique({ where: { id: reportId }, select: { id: true } });
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id: authorId }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Create comment
     const comment = await prisma.comment.create({
-      data: {
-        content,
-        reportId,
-        authorId
-      },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true }
-        },
-        report: {
-          select: { id: true, title: true }
-        }
-      }
+      data: { content, reportId, authorId: req.user.id },
+      select: commentSelect,
     });
-
-    res.status(201).json({
-      message: 'Comment created successfully',
-      data: comment
-    });
+    res.status(201).json({ message: 'Comment created', data: comment });
   } catch (error) {
-    console.error('Error creating comment:', error);
+    console.error('Error creating comment:', error.message);
     res.status(500).json({ error: 'Failed to create comment' });
   }
 };
 
-// READ - Get all comments for a report
+// GET /api/comments/report/:reportId - list comments (public, paginated)
 const getCommentsByReport = async (req, res) => {
   try {
     const { reportId } = req.params;
-    const { limit = 20, skip = 0 } = req.query;
+    const { limit, skip } = req.query;
 
-    // Check if report exists
-    const report = await prisma.report.findUnique({
-      where: { id: reportId }
-    });
-
+    const report = await prisma.report.findUnique({ where: { id: reportId }, select: { id: true } });
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Fetch comments with pagination
-    const comments = await prisma.comment.findMany({
-      where: { reportId },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit),
-      skip: parseInt(skip)
-    });
+    const [comments, total] = await Promise.all([
+      prisma.comment.findMany({
+        where: { reportId },
+        select: commentSelect,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.comment.count({ where: { reportId } }),
+    ]);
 
-    // Get total count for pagination
-    const total = await prisma.comment.count({
-      where: { reportId }
-    });
-
-    res.status(200).json({
-      data: comments,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        skip: parseInt(skip)
-      }
-    });
+    res.status(200).json({ data: comments, pagination: { total, limit, skip } });
   } catch (error) {
-    console.error('Error fetching comments:', error);
+    console.error('Error fetching comments:', error.message);
     res.status(500).json({ error: 'Failed to fetch comments' });
   }
 };
 
-// READ - Get a single comment by ID
+// GET /api/comments/:id
 const getCommentById = async (req, res) => {
   try {
-    const { id } = req.params;
-
     const comment = await prisma.comment.findUnique({
-      where: { id },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true }
-        },
-        report: {
-          select: { id: true, title: true, status: true }
-        }
-      }
+      where: { id: req.params.id },
+      select: { ...commentSelect, report: { select: { id: true, title: true, status: true } } },
     });
-
     if (!comment) {
       return res.status(404).json({ error: 'Comment not found' });
     }
-
-    res.status(200).json(comment);
+    res.status(200).json({ data: comment });
   } catch (error) {
-    console.error('Error fetching comment:', error);
+    console.error('Error fetching comment:', error.message);
     res.status(500).json({ error: 'Failed to fetch comment' });
   }
 };
 
-// UPDATE - Update a comment
+// PUT /api/comments/:id - edit (author or admin)
 const updateComment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
-
-    // Validate input
-    if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
-    }
-
-    // Check if comment exists
-    const existingComment = await prisma.comment.findUnique({
-      where: { id }
-    });
-
-    if (!existingComment) {
+    const existing = await prisma.comment.findUnique({ where: { id }, select: { authorId: true } });
+    if (!existing) {
       return res.status(404).json({ error: 'Comment not found' });
     }
+    if (existing.authorId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You can only edit your own comments' });
+    }
 
-    // Update comment
-    const updatedComment = await prisma.comment.update({
+    const updated = await prisma.comment.update({
       where: { id },
-      data: { content },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true }
-        },
-        report: {
-          select: { id: true, title: true }
-        }
-      }
+      data: { content: req.body.content },
+      select: commentSelect,
     });
-
-    res.status(200).json({
-      message: 'Comment updated successfully',
-      data: updatedComment
-    });
+    res.status(200).json({ message: 'Comment updated', data: updated });
   } catch (error) {
-    console.error('Error updating comment:', error);
+    console.error('Error updating comment:', error.message);
     res.status(500).json({ error: 'Failed to update comment' });
   }
 };
 
-// DELETE - Delete a comment
+// DELETE /api/comments/:id - remove (author or admin)
 const deleteComment = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Check if comment exists
-    const comment = await prisma.comment.findUnique({
-      where: { id }
-    });
-
-    if (!comment) {
+    const existing = await prisma.comment.findUnique({ where: { id }, select: { authorId: true } });
+    if (!existing) {
       return res.status(404).json({ error: 'Comment not found' });
     }
-
-    // Delete comment
-    await prisma.comment.delete({
-      where: { id }
-    });
-
-    res.status(200).json({
-      message: 'Comment deleted successfully'
-    });
+    if (existing.authorId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You can only delete your own comments' });
+    }
+    await prisma.comment.delete({ where: { id } });
+    res.status(200).json({ message: 'Comment deleted' });
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    console.error('Error deleting comment:', error.message);
     res.status(500).json({ error: 'Failed to delete comment' });
   }
 };
@@ -213,6 +126,5 @@ module.exports = {
   getCommentsByReport,
   getCommentById,
   updateComment,
-  deleteComment
+  deleteComment,
 };
-

@@ -1,121 +1,130 @@
-// Load environment variables
-require('dotenv').config();
+// Uwazi API server
 
-// Import dependencies
+const config = require('./src/config/env');
+
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
-const { PrismaClient } = require('@prisma/client');
+const helmet = require('helmet');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
-// Initialize Express app
+const prisma = require('./src/lib/prisma');
+const { apiLimiter } = require('./src/middleware/rateLimit');
+const { notFound, errorHandler } = require('./src/middleware/errorHandler');
+
 const app = express();
 
-// Initialize Prisma Client
-const prisma = new PrismaClient();
+// Behind a proxy/load balancer (Render, Fly, Nginx) so rate limiting and
+// req.ip use the real client address.
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
-// Swagger / OpenAPI configuration
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'Uwazi API Documentation',
-      version: '1.0.0',
-      description: 'API documentation for the Uwazi Social Justice Tracking Application',
+// --- Security headers ---
+app.use(
+  helmet({
+    // API only serves JSON; a restrictive CSP is cheap insurance.
+    contentSecurityPolicy: {
+      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
     },
-    servers: [
-      {
-        url: 'http://localhost:5000', // Your local development URL
+    crossOriginResourcePolicy: { policy: 'same-site' },
+  })
+);
+
+// --- CORS: explicit allowlist only ---
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow same-origin / curl / server-to-server (no Origin header).
+      // Disallowed origins get no CORS headers (browser blocks) rather than a 500.
+      if (!origin || config.corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+// --- Body parsing with hard size caps ---
+app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ extended: false, limit: '256kb' }));
+
+// --- Global rate limit ---
+app.use(apiLimiter);
+
+// --- Health check ---
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// --- API docs (disabled in production unless ENABLE_API_DOCS=true) ---
+if (config.enableApiDocs) {
+  const swaggerSpec = swaggerJsdoc({
+    definition: {
+      openapi: '3.0.0',
+      info: {
+        title: 'Uwazi API',
+        version: '1.0.0',
+        description: 'API for the Uwazi corruption-reporting platform',
       },
-    ],
-    components: {
-      securitySchemes: {
-        AdminAuth: {
-          type: 'apiKey',
-          in: 'header',
-          name: 'X-User-Id',
-          description: 'Admin user ID used for protected admin endpoints',
+      components: {
+        securitySchemes: {
+          BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
         },
       },
     },
-  },
-  apis: ['./src/routes/*.js'], // Path to the API docs (where your routes are)
-};
+    apis: ['./src/routes/*.js'],
+  });
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.get('/api-docs.json', (_req, res) => res.json(swaggerSpec));
+}
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
+// --- Routes ---
+app.use('/api/reports', require('./src/routes/reportRoutes'));
+app.use('/api/users', require('./src/routes/userRoutes'));
+app.use('/api/comments', require('./src/routes/commentRoutes'));
+app.use('/api/metrics', require('./src/routes/metricsRoutes'));
+app.use('/api/signals', require('./src/routes/signalRoutes'));
 
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// --- Legacy Python analytics proxy (opt-in only) ---
+if (config.legacyProxyTarget) {
+  app.use(
+    '/api/legacy',
+    createProxyMiddleware({ target: config.legacyProxyTarget, changeOrigin: true })
+  );
+}
 
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: Health check for the backend service
- *     tags: [Health]
- *     responses:
- *       200:
- *         description: Server is running
- */
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'Server is running' });
-});
+// --- 404 + error handling ---
+app.use(notFound);
+app.use(errorHandler);
 
-// Import routes
-const reportRoutes = require('./src/routes/reportRoutes');
-const userRoutes = require('./src/routes/userRoutes');
-const commentRoutes = require('./src/routes/commentRoutes');
-const metricsRoutes = require('./src/routes/metricsRoutes');
-const signalRoutes = require('./src/routes/signalRoutes');
-
-// Use routes
-app.use('/api/reports', reportRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/comments', commentRoutes);
-app.use('/api/metrics', metricsRoutes);
-app.use('/api/signals', signalRoutes);
-
-// Route legacy Python API requests
-app.use('/api/legacy', createProxyMiddleware({ target: 'http://localhost:8000', changeOrigin: true }));
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
-});
-
-// Server initialization
-const PORT = process.env.PORT || 5000;
-
+// --- Boot ---
 const startServer = async () => {
   try {
-    // Test database connection
     await prisma.$connect();
+    // eslint-disable-next-line no-console
     console.log('✓ Connected to database');
-
-    app.listen(PORT, () => {
-      console.log(`✓ Server running on port ${PORT}`);
+    app.listen(config.port, () => {
+      // eslint-disable-next-line no-console
+      console.log(`✓ Uwazi API listening on port ${config.port} (${config.nodeEnv})`);
     });
   } catch (error) {
-    console.error('✗ Failed to start server:', error);
+    // eslint-disable-next-line no-console
+    console.error('✗ Failed to start server:', error.message);
     process.exit(1);
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
+const shutdown = async () => {
   await prisma.$disconnect();
-  process.exit();
-});
+  process.exit(0);
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 module.exports = app;
-

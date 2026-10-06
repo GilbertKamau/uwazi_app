@@ -1,11 +1,13 @@
 node_modules/
-.env
-.env.local
 dist/
 build/
 *.log
 .DS_Store
-.gitignore
+
+# Environment - never commit real secrets
+.env
+.env.*
+!.env.example
 
 # Python cache
 __pycache__/
@@ -21,4 +23,3 @@ output/
 .venv/
 venv/
 ENV/
-
